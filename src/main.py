@@ -22,7 +22,14 @@ import matplotlib.pyplot as plt
 from numpy import dtype, ndarray
 from numpy._typing._shape import _AnyShape
 
-from src.package import black_top_hat, connection_count, gaussian_filter, sobel_filter, utils
+from src.package import (
+    black_top_hat,
+    connection_count,
+    gaussian_filter,
+    sobel_filter,
+    utils,
+    watershed,
+)
 from src.package import config as configMOD
 from src.package import limb_darking_resolution as ldr
 
@@ -121,12 +128,25 @@ def main(config: dict) -> int:
 
         if extractionMethod == "countComponents":
 
-            imgName = f"countComponents_c{extractionConfig['countComponents']['c']}_threshold{extractionConfig['countComponents']['space_threshold']}.png"
+            imgName = f"countComponents_c{extractionConfig['countComponents']['c']}_threshold{extractionConfig['countComponents']['space_threshold']}_minArea{extractionConfig['countComponents']['min_area']}.png"
 
             count, image = connection_count.countConnectedComponents(
                 image,  # pyright: ignore[reportArgumentType]
                 **extractionConfig["countComponents"]
             )
+        elif extractionMethod == "watershed":
+            imgName = f"watershed_c{extractionConfig['countComponents']['c']}_threshold{extractionConfig['countComponents']['space_threshold']}_minArea{extractionConfig['countComponents']['min_area']}_minDistance{extractionConfig['watershed']['min_distance']}.png"
+
+            count, image = connection_count.countConnectedComponents(
+                image,  # pyright: ignore[reportArgumentType]
+                **extractionConfig["countComponents"]
+            )
+
+            count, image = watershed.watershedCount(
+                image,
+                extractionConfig["countComponents"]["min_area"],
+                extractionConfig["watershed"]["min_distance"]
+			)
         else:
             raise ValueError(f"Unknown extraction method: {extractionMethod}")
     except Exception as e:
@@ -134,10 +154,6 @@ def main(config: dict) -> int:
     
     utils.svImage_withInfo(image,{"result": {"count": count}, "config": config, "moduleVersions": moduleVersions},svFolder / imgName, )
 
-    plt.imshow(image, origin="lower", cmap="gray")
-    plt.colorbar(label="Pixel value")
-    plt.show()
-    print("連結成分の個数：", count)
     binary_image = image
 
     # 検証用画像を出力
@@ -150,5 +166,9 @@ def main(config: dict) -> int:
         image_path,
         count,
     )
+    plt.imshow(image, origin="lower", cmap="gray")
+    plt.colorbar(label="Pixel value")
+    plt.show()
+    
 
     return count
