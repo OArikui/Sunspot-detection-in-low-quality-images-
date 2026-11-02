@@ -14,7 +14,6 @@
     - ``run.py`` から受け取った設定に基づく処理の実行
 """
 
-from pathlib import Path
 from pprint import pprint
 from typing import Any
 
@@ -33,9 +32,10 @@ from src.package import (
 )
 from src.package import config as configMOD
 from src.package import limb_darking_resolution as ldr
+from src.package.run_logger import RunLogger
 
 
-def main(config: dict) -> int:
+def main(config: dict, run_logger: RunLogger | None = None) -> int:
     """設定に従って太陽画像の補正、強調、黒点候補抽出を実行する。
 
     Parameters
@@ -54,6 +54,12 @@ def main(config: dict) -> int:
     print("============\n\n")
 
     image_path = configMOD.resolve_path(config["Paths"]["input_image"])
+    output_root = (
+        run_logger.session_dir
+        if run_logger is not None
+        else configMOD.resolve_path(config["Paths"]["output_folder"])
+    )
+    output_root.mkdir(parents=True, exist_ok=True)
 
     # 画像の明るさ（画素値）を取得し、変数image（numpy配列）に代入します。
     image = utils.loadImage(image_path)    
@@ -65,7 +71,7 @@ def main(config: dict) -> int:
         darkingConfig = config["LimbDarkingResolution"]
         darkingMethod = darkingConfig["chosen_method"]
 
-        svFolder = Path(config["Paths"]["output_folder"]) / config["Paths"]["folder_names"]["LimbDarkingResolution"]
+        svFolder = output_root
 
         if darkingMethod == "polynomialFit":
             moduleVersions["LimbDarkingResolution"] = ldr.version
@@ -93,7 +99,7 @@ def main(config: dict) -> int:
         emphasisConfig = config["Emphasis"]
         emphasisMethod = emphasisConfig["chosen_method"]
 
-        svFolder = Path(config["Paths"]["output_folder"]) / config["Paths"]["folder_names"]["Emphasis"]
+        svFolder = output_root
 
         if emphasisMethod == "SobelFilter":
             moduleVersions["Emphasis"] = sobel_filter.version
@@ -136,7 +142,7 @@ def main(config: dict) -> int:
         extractionConfig = config["Extraction"]
         extractionMethod = extractionConfig["chosen_method"]
 
-        svFolder = Path(config["Paths"]["output_folder"]) / config["Paths"]["folder_names"]["Extraction"]
+        svFolder = output_root
 
         if extractionMethod == "countComponents":
 
@@ -145,14 +151,6 @@ def main(config: dict) -> int:
             count, image, binary_image = connection_count.countConnectedComponents(
                 image,  # pyright: ignore[reportArgumentType]
                 **extractionConfig["countComponents"]
-            )
-            regions = mask.selectMaskRegions(
-                binary_image, config.get("MaskDialog", {}).get("display")
-            )
-            count, image = mask.applyMask(
-                binary_image, # pyright: ignore[reportArgumentType]
-                regions,
-                count
             )
         elif extractionMethod == "watershed":
             imgName = f"watershed_c{extractionConfig['countComponents']['c']}_threshold{extractionConfig['countComponents']['space_threshold']}_minArea{extractionConfig['countComponents']['min_area']}_minDistance{extractionConfig['watershed']['min_distance']}.png"
@@ -168,16 +166,40 @@ def main(config: dict) -> int:
                 extractionConfig["watershed"]["min_distance"]
             )
 
-            regions = mask.selectMaskRegions(
-                binary_image, config.get("MaskDialog", {}).get("display")
-            )
-            count, image = mask.applyMask(
-                binary_image, # pyright: ignore[reportArgumentType]
-                regions,
-                count
-            )
         else:
             raise ValueError(f"Unknown extraction method: {extractionMethod}")
+
+        regions = mask.selectMaskRegions(
+            binary_image, config.get("MaskDialog", {}).get("display")
+        )
+        if run_logger is not None:
+            run_logger.record_event(
+                "mask_regions_selected",
+                {
+                    "image_width": int(binary_image.shape[1]),
+                    "image_height": int(binary_image.shape[0]),
+                    "selected_region_count": len(regions),
+                    "regions": [
+                        {
+                            "index": index,
+                            "x": x,
+                            "y": y,
+                            "width": width,
+                            "height": height,
+                        }
+                        for index, (x, y, width, height) in enumerate(regions, start=1)
+                    ],
+                },
+            )
+
+        count, image, mask_details = mask.applyMask(
+            binary_image,  # pyright: ignore[reportArgumentType]
+            regions,
+            count,
+            return_details=True,
+        )
+        if run_logger is not None:
+            run_logger.record_event("mask_applied", mask_details)
     except Exception as e:
         raise RuntimeError(f"[Fatal]: 連結成分の抽出に失敗しました。:{e}") from e
     
@@ -194,10 +216,13 @@ def main(config: dict) -> int:
         config,
         image_path,
         count,
+        output_dir=output_root,
     )
-    plt.imshow(image, origin="lower", cmap="gray")
-    plt.colorbar(label="Pixel value")
-    plt.show()
+    # 対話的なプレビューは既定で無効にし、バッチ実行が plt.show() で停止しないようにする。
+    if config.get("Display", {}).get("show_final_image", False):
+        plt.imshow(image, origin="lower", cmap="gray")
+        plt.colorbar(label="Pixel value")
+        plt.show()
     
 
     return count
