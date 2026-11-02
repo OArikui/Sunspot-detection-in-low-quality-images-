@@ -41,19 +41,48 @@ class _FinalPreviewCanvas(QWidget):
     viewChanged = pyqtSignal(str)
     historyChanged = pyqtSignal(bool, bool)
 
-    def __init__(self, image: np.ndarray, parent: QWidget | None = None) -> None:
-        """表示画像と初期表示範囲を構築する。
+    def __init__(
+        self,
+        image: np.ndarray,
+        mask_regions: list[tuple[int, int, int, int]] | None = None,
+        display_options: dict | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        """表示画像、マスク領域オーバーレイ、初期表示範囲を構築する。
 
         Parameters
         ----------
         image : numpy.ndarray
             最終確認する2次元画像。
+        mask_regions : list[tuple[int, int, int, int]] | None, optional
+            左上原点のマスク矩形。各要素は (x, y, width, height)。
+        display_options : dict | None, optional
+            最終確認画面のマスク塗りつぶし設定。
         parent : QWidget | None, optional
             親ウィジェット。
         """
         super().__init__(parent)
         if image.ndim != 2 or image.size == 0:
             raise ValueError("最終確認画像は空でない2次元配列にしてください。")
+
+        options = display_options or {}
+        self._mask_regions = [
+            (int(x), int(y), int(width), int(height))
+            for x, y, width, height in (mask_regions or [])
+        ]
+        self._show_mask_fill = bool(options.get("show_mask_fill", False))
+        raw_color = options.get("mask_fill_color", [0, 255, 0])
+        if not isinstance(raw_color, (list, tuple)) or len(raw_color) != 3:
+            raw_color = [0, 255, 0]
+        self._mask_fill_color = (
+            min(max(int(raw_color[0]), 0), 255),
+            min(max(int(raw_color[1]), 0), 255),
+            min(max(int(raw_color[2]), 0), 255),
+        )
+        self._mask_fill_alpha = min(
+            max(int(options.get("mask_fill_alpha", 72)), 0),
+            255,
+        )
 
         values = np.nan_to_num(
             image.astype(np.float64),
@@ -340,7 +369,7 @@ class _FinalPreviewCanvas(QWidget):
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
 
-        image_rect, _ = self._view_geometry()
+        image_rect, scale = self._view_geometry()
         source_rect = QRectF(
             self._view_x_min,
             self._image_height - self._view_y_max,
@@ -350,6 +379,31 @@ class _FinalPreviewCanvas(QWidget):
         painter.save()
         painter.setClipRect(self._plot_area())
         painter.drawImage(image_rect, self._qimage, source_rect)
+
+        if self._show_mask_fill and self._mask_regions:
+            fill_color = QColor(*self._mask_fill_color)
+            fill_color.setAlpha(self._mask_fill_alpha)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(fill_color)
+            for x, y, width, height in self._mask_regions:
+                x_min = max(0, x)
+                y_min = max(0, y)
+                x_max = min(self._image_width, x + width)
+                y_max = min(self._image_height, y + height)
+                if x_min >= x_max or y_min >= y_max:
+                    continue
+
+                # Mask rectangles use a top-left origin. Convert their Y range
+                # to the lower-left image coordinates used by this viewer.
+                data_y_top = self._image_height - y_min
+                rectangle = QRectF(
+                    image_rect.left() + (x_min - self._view_x_min) * scale,
+                    image_rect.bottom() - (data_y_top - self._view_y_min) * scale,
+                    (x_max - x_min) * scale,
+                    (y_max - y_min) * scale,
+                )
+                painter.drawRect(rectangle)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.restore()
 
         border_pen = QPen(QColor(235, 235, 235), 1)
@@ -567,20 +621,30 @@ class _FinalPreviewCanvas(QWidget):
 class _FinalPreviewDialog(QDialog):
     """解析結果を確認する、Matplotlib のナビゲーション構成を意識したダイアログ。"""
 
-    def __init__(self, image: np.ndarray, parent: QWidget | None = None) -> None:
-        """ツールバー、画像キャンバス、座標 HUD、閉じるボタンを構築する。
+    def __init__(
+        self,
+        image: np.ndarray,
+        mask_regions: list[tuple[int, int, int, int]] | None = None,
+        display_options: dict | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        """ツールバー、画像キャンバス、マスク表示、座標 HUD を構築する。
 
         Parameters
         ----------
         image : numpy.ndarray
             最終確認する2次元画像。
+        mask_regions : list[tuple[int, int, int, int]] | None, optional
+            左上原点のマスク矩形。
+        display_options : dict | None, optional
+            最終確認画面の表示設定。
         parent : QWidget | None, optional
             親ウィジェット。
         """
         super().__init__(parent)
         self.setWindowTitle("Final Result Preview")
 
-        self.canvas = _FinalPreviewCanvas(image)
+        self.canvas = _FinalPreviewCanvas(image, mask_regions, display_options)
         toolbar = QToolBar(self)
         toolbar.setMovable(False)
         toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
@@ -659,13 +723,21 @@ class _FinalPreviewDialog(QDialog):
         self.resize(1100, 820)
 
 
-def show_final_preview(image: np.ndarray) -> None:
-    """PyQt ダイアログで最終解析画像を操作・確認する。
+def show_final_preview(
+    image: np.ndarray,
+    mask_regions: list[tuple[int, int, int, int]] | None = None,
+    display_options: dict | None = None,
+) -> None:
+    """PyQt ダイアログで最終解析画像とマスク領域を操作・確認する。
 
     Parameters
     ----------
     image : numpy.ndarray
         表示する2次元の最終解析画像。
+    mask_regions : list[tuple[int, int, int, int]] | None, optional
+        左上原点のマスク矩形。
+    display_options : dict | None, optional
+        マスク塗りつぶしの有無、色、不透明度を含む表示設定。
     """
     ensure_qapplication()
     LOGGER.info(
@@ -673,6 +745,6 @@ def show_final_preview(image: np.ndarray) -> None:
         image.shape,
         image.dtype,
     )
-    dialog = _FinalPreviewDialog(image)
+    dialog = _FinalPreviewDialog(image, mask_regions, display_options)
     dialog.exec()
     LOGGER.info("Final result preview closed.")

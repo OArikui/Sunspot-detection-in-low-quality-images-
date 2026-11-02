@@ -45,4 +45,4 @@ CSV の列名・値の意味・座標系・複数マスクに重なった場合�
 - **Shift + 右ドラッグ**: Pan モードを選ばずに表示位置を移動します。
 - ダイアログ下部にはカーソル位置と現在の X・Y 表示範囲を表示します。
 
-マスク選択ダイアログでは「マスク範囲を塗りつぶす」チェックボックスで、選択領域の半透明表示を切り替えられます。初期状態と不透明度は MaskDialog.display.fill_mask_area と MaskDialog.display.fill_alpha で設定できます。
+選択したマスク範囲は最終確認画面で半透明に塗りつぶして表示できます。表示の有無は `Display.show_mask_fill`、色と不透明度は `Display.mask_fill_color` と `Display.mask_fill_alpha` で設定します。マスク選択ダイアログでは塗りつぶしを行わず、矩形の枠だけを表示します。

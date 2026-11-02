@@ -19,7 +19,6 @@ from PyQt6.QtGui import (
     QResizeEvent,
 )
 from PyQt6.QtWidgets import (
-    QCheckBox,
     QDialog,
     QDialogButtonBox,
     QHBoxLayout,
@@ -131,7 +130,6 @@ class _MaskCanvas(QWidget):
             QImage.Format.Format_RGB888,
         ).copy()
         self._options = options
-        self._fill_mask_area = bool(options.get("fill_mask_area", True))
         self.regions: list[tuple[int, int, int, int]] = []
         self._drawing = False
         self._start_point = (0, 0)
@@ -191,17 +189,6 @@ class _MaskCanvas(QWidget):
             min(max(int(x), 0), self.image_width - 1),
             min(max(int(y), 0), self.image_height - 1),
         )
-
-    def set_fill_mask_area(self, enabled: bool) -> None:
-        """マスク矩形の半透明塗りつぶしを切り替える。
-
-        Parameters
-        ----------
-        enabled : bool
-            True の場合、選択済み・選択中のマスク範囲を塗りつぶす。
-        """
-        self._fill_mask_area = bool(enabled)
-        self.update()
 
     def _overlay_lines(self, scale: float) -> list[str]:
         """設定に応じた座標、選択状態、操作説明を生成する。
@@ -281,34 +268,6 @@ class _MaskCanvas(QWidget):
         if len(color_values) != 3:
             color_values = [0, 255, 0]
         color = QColor(*reversed(color_values))
-
-        if self._fill_mask_area:
-            fill_alpha = min(max(int(self._options.get("fill_alpha", 72)), 0), 255)
-            fill_color = QColor(color)
-            fill_color.setAlpha(fill_alpha)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(fill_color)
-            for x, y, width, height in self.regions:
-                painter.drawRect(
-                    QRectF(
-                        target.left() + x * scale_x,
-                        target.top() + y * scale_y,
-                        width * scale_x,
-                        height * scale_y,
-                    )
-                )
-            if self._drawing:
-                x1, y1 = self._start_point
-                x2, y2 = self._current_point
-                painter.drawRect(
-                    QRectF(
-                        target.left() + min(x1, x2) * scale_x,
-                        target.top() + min(y1, y2) * scale_y,
-                        abs(x2 - x1) * scale_x,
-                        abs(y2 - y1) * scale_y,
-                    )
-                )
-            painter.setBrush(Qt.BrushStyle.NoBrush)
 
         pen = QPen(color, float(self._options["rectangle_thickness"]))
         pen.setCosmetic(True)
@@ -461,9 +420,6 @@ class _MaskDialog(QDialog):
 
         self.canvas = _MaskCanvas(image, _to_display_image(image, str(options["colormap"])), options)
         self.region_count_label = QLabel("選択領域: 0")
-        self.fill_mask_checkbox = QCheckBox("マスク範囲を塗りつぶす")
-        self.fill_mask_checkbox.setChecked(bool(options.get("fill_mask_area", True)))
-        self.fill_mask_checkbox.toggled.connect(self.canvas.set_fill_mask_area)
         undo_button = QPushButton("1つ戻す")
         undo_button.clicked.connect(self.canvas.undo)
 
@@ -483,7 +439,6 @@ class _MaskDialog(QDialog):
         )
 
         footer = QHBoxLayout()
-        footer.addWidget(self.fill_mask_checkbox)
         footer.addWidget(self.region_count_label)
         footer.addStretch(1)
         footer.addWidget(undo_button)

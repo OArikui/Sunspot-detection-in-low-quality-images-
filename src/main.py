@@ -283,7 +283,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
     )
     # 対話的な最終確認は設定で有効化した場合のみ PyQt ダイアログで表示する。
     if config.get("Display", {}).get("show_final_image", False):
-        show_final_preview(image)
+        show_final_preview(image, regions, config.get("Display", {}))
     
 
     LOGGER.info("Processing completed: %d sunspots detected", count)
