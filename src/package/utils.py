@@ -121,11 +121,8 @@ def _metadata_to_json(value: object, max_items: int = 256) -> JSONValue:
         if len(value) > max_items:
             converted.append(f"... [{len(value) - max_items} more items]")
         return converted
-    if hasattr(value, "isoformat"):
-        try:
-            return value.isoformat()
-        except (TypeError, ValueError):
-            pass
+    if isinstance(value, datetime):
+        return value.isoformat()
     return str(value)
 
 
@@ -189,7 +186,10 @@ def collect_image_metadata(
             pages = []
             for page_index, page in enumerate(tiff.pages[:32]):
                 tags = {}
-                for tag in page.tags.values():
+                # tifffile may expose non-keyframe pages as TiffFrame objects.
+                # Resolve their keyframe to access the shared TIFF tag collection.
+                tag_page = cast(tifffile.TiffPage, getattr(page, "keyframe", page))
+                for tag in tag_page.tags.values():
                     tags[str(tag.name)] = _metadata_to_json(tag.value)
                 pages.append(
                     {
