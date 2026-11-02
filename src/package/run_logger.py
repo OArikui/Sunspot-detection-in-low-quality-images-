@@ -179,7 +179,7 @@ class RunLogger:
 
         self._write_json()
         self._append_text(
-            "\\n".join(
+            "\n".join(
                 [
                     "=== PROCESSING RUN STARTED ===",
                     f"Run ID: {self.run_id}",
@@ -218,7 +218,7 @@ class RunLogger:
         self.data["events"].append(event)
         self._write_json()
         self._append_text(
-            "\\n".join(
+            "\n".join(
                 [
                     f"=== EVENT: {event_name} ===",
                     f"Timestamp: {event['timestamp']}",
@@ -248,7 +248,7 @@ class RunLogger:
         )
         self._write_json()
         self._append_text(
-            "\\n".join(
+            "\n".join(
                 [
                     "=== PROCESSING RUN COMPLETED ===",
                     f"Finished at: {finished_at.isoformat()}",
@@ -287,7 +287,7 @@ class RunLogger:
         )
         self._write_json()
         self._append_text(
-            "\\n".join(
+            "\n".join(
                 [
                     "=== PROCESSING RUN FAILED ===",
                     f"Finished at: {finished_at.isoformat()}",
@@ -305,14 +305,14 @@ class RunLogger:
         """Atomically update the machine-readable JSON log."""
         temporary_path = self.json_path.with_suffix(".json.tmp")
         temporary_path.write_text(
-            json.dumps(self.data, ensure_ascii=False, indent=2, default=str) + "\\n",
+            json.dumps(self.data, ensure_ascii=False, indent=2, default=str) + "\n",
             encoding="utf-8",
         )
         temporary_path.replace(self.json_path)
 
     def _append_text(self, content: str) -> None:
         """Append text to the human-readable log file."""
-        with self.log_path.open("a", encoding="utf-8", newline="\\n") as file:
+        with self.log_path.open("a", encoding="utf-8", newline="\n") as file:
             file.write(content)
-            if not content.endswith("\\n"):
-                file.write("\\n")
+            if not content.endswith("\n"):
+                file.write("\n")
