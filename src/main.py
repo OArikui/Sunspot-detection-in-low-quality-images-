@@ -16,6 +16,8 @@
 
 import logging
 from typing import Any
+
+import numpy as np
 from numpy import dtype, ndarray
 from numpy._typing._shape import _AnyShape
 
@@ -327,7 +329,16 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
     )
     # 対話的な最終確認は設定で有効化した場合のみ PyQt ダイアログで表示する。
     if config.get("Display", {}).get("show_final_image", False):
-        show_final_preview(image, regions, config.get("Display", {}))
+        invalid_sunspot_mask = np.isin(
+            sunspot_labels,
+            mask_details["excluded_candidate_labels"],
+        )
+        show_final_preview(
+            image,
+            regions,
+            config.get("Display", {}),
+            invalid_sunspot_mask,
+        )
     
 
     LOGGER.info("Processing completed: %d sunspots detected", count)

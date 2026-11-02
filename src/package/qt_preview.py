@@ -20,6 +20,7 @@ from PyQt6.QtGui import (
     QWheelEvent,
 )
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QDialog,
     QDialogButtonBox,
     QHBoxLayout,
@@ -46,6 +47,7 @@ class _FinalPreviewCanvas(QWidget):
         image: np.ndarray,
         mask_regions: list[tuple[int, int, int, int]] | None = None,
         display_options: dict | None = None,
+        invalid_sunspot_mask: np.ndarray | None = None,
         parent: QWidget | None = None,
     ) -> None:
         """表示画像、マスク領域オーバーレイ、初期表示範囲を構築する。
@@ -58,6 +60,8 @@ class _FinalPreviewCanvas(QWidget):
             左上原点のマスク矩形。各要素は (x, y, width, height)。
         display_options : dict | None, optional
             最終確認画面のマスク塗りつぶし設定。
+        invalid_sunspot_mask : numpy.ndarray | None, optional
+            マスクで除外された黒点画素を True とした2次元配列。
         parent : QWidget | None, optional
             親ウィジェット。
         """
@@ -83,6 +87,22 @@ class _FinalPreviewCanvas(QWidget):
             max(int(options.get("mask_fill_alpha", 72)), 0),
             255,
         )
+        self._show_invalid_sunspots = bool(
+            options.get("show_invalid_sunspots", True)
+        )
+        self._invalid_sunspots_qimage: QImage | None = None
+        if invalid_sunspot_mask is not None:
+            if invalid_sunspot_mask.ndim != 2 or invalid_sunspot_mask.shape != image.shape:
+                raise ValueError("無効黒点マスクは表示画像と同じ形状の2次元配列にしてください。")
+            invalid_overlay = np.zeros((*image.shape, 4), dtype=np.uint8)
+            invalid_overlay[invalid_sunspot_mask.astype(bool)] = (255, 64, 64, 190)
+            self._invalid_sunspots_qimage = QImage(
+                invalid_overlay.tobytes(),
+                image.shape[1],
+                image.shape[0],
+                int(invalid_overlay.strides[0]),
+                QImage.Format.Format_RGBA8888,
+            ).copy()
 
         values = np.nan_to_num(
             image.astype(np.float64),
@@ -144,6 +164,19 @@ class _FinalPreviewCanvas(QWidget):
         if self._show_mask_fill == visible:
             return
         self._show_mask_fill = visible
+        self.update()
+
+    def set_invalid_sunspots_visible(self, visible: bool) -> None:
+        """無効黒点のオーバーレイ表示を切り替える。
+
+        Parameters
+        ----------
+        visible : bool
+            True の場合はマスクで除外された黒点を赤色で重ねて表示する。
+        """
+        if self._show_invalid_sunspots == visible:
+            return
+        self._show_invalid_sunspots = visible
         self.update()
 
     def _plot_area(self) -> QRectF:
@@ -415,6 +448,13 @@ class _FinalPreviewCanvas(QWidget):
                 )
                 painter.drawRect(rectangle)
             painter.setBrush(Qt.BrushStyle.NoBrush)
+
+        if self._show_invalid_sunspots and self._invalid_sunspots_qimage is not None:
+            painter.drawImage(
+                image_rect,
+                self._invalid_sunspots_qimage,
+                source_rect,
+            )
         painter.restore()
 
         border_pen = QPen(QColor(235, 235, 235), 1)
@@ -637,6 +677,7 @@ class _FinalPreviewDialog(QDialog):
         image: np.ndarray,
         mask_regions: list[tuple[int, int, int, int]] | None = None,
         display_options: dict | None = None,
+        invalid_sunspot_mask: np.ndarray | None = None,
         parent: QWidget | None = None,
     ) -> None:
         """ツールバー、画像キャンバス、マスク表示、座標 HUD を構築する。
@@ -649,13 +690,20 @@ class _FinalPreviewDialog(QDialog):
             左上原点のマスク矩形。
         display_options : dict | None, optional
             最終確認画面の表示設定。
+        invalid_sunspot_mask : numpy.ndarray | None, optional
+            マスクで除外された黒点画素を True とした2次元配列。
         parent : QWidget | None, optional
             親ウィジェット。
         """
         super().__init__(parent)
         self.setWindowTitle("Final Result Preview")
 
-        self.canvas = _FinalPreviewCanvas(image, mask_regions, display_options)
+        self.canvas = _FinalPreviewCanvas(
+            image,
+            mask_regions,
+            display_options,
+            invalid_sunspot_mask,
+        )
         toolbar = QToolBar(self)
         toolbar.setMovable(False)
         toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
@@ -700,14 +748,25 @@ class _FinalPreviewDialog(QDialog):
         toolbar.addAction(zoom_action)
 
         toolbar.addSeparator()
-        mask_fill_action = QAction("Mask Fill", self)
-        mask_fill_action.setCheckable(True)
-        mask_fill_action.setChecked(
+        mask_fill_checkbox = QCheckBox("Mask Fill", self)
+        mask_fill_checkbox.setChecked(
             bool((display_options or {}).get("show_mask_fill", False))
         )
-        mask_fill_action.setToolTip("選択したマスク範囲の塗りつぶしを表示／非表示")
-        mask_fill_action.toggled.connect(self.canvas.set_mask_fill_visible)
-        toolbar.addAction(mask_fill_action)
+        mask_fill_checkbox.setToolTip("選択したマスク範囲の塗りつぶしを表示／非表示")
+        mask_fill_checkbox.toggled.connect(self.canvas.set_mask_fill_visible)
+        toolbar.addWidget(mask_fill_checkbox)
+
+        invalid_sunspots_checkbox = QCheckBox("無効黒点", self)
+        invalid_sunspots_checkbox.setChecked(
+            bool((display_options or {}).get("show_invalid_sunspots", True))
+        )
+        invalid_sunspots_checkbox.setToolTip(
+            "マスクで除外された黒点を赤色で表示／非表示"
+        )
+        invalid_sunspots_checkbox.toggled.connect(
+            self.canvas.set_invalid_sunspots_visible
+        )
+        toolbar.addWidget(invalid_sunspots_checkbox)
 
         pan_action.toggled.connect(
             lambda checked: self.canvas.set_navigation_mode("pan" if checked else "none")
@@ -749,6 +808,7 @@ def show_final_preview(
     image: np.ndarray,
     mask_regions: list[tuple[int, int, int, int]] | None = None,
     display_options: dict | None = None,
+    invalid_sunspot_mask: np.ndarray | None = None,
 ) -> None:
     """PyQt ダイアログで最終解析画像とマスク領域を操作・確認する。
 
@@ -759,7 +819,9 @@ def show_final_preview(
     mask_regions : list[tuple[int, int, int, int]] | None, optional
         左上原点のマスク矩形。
     display_options : dict | None, optional
-        マスク塗りつぶしの有無、色、不透明度を含む表示設定。
+        マスク塗りつぶし・無効黒点表示の初期状態、色、不透明度を含む表示設定。
+    invalid_sunspot_mask : numpy.ndarray | None, optional
+        マスクで除外された黒点画素を True とした2次元配列。
     """
     ensure_qapplication()
     LOGGER.info(
@@ -767,6 +829,11 @@ def show_final_preview(
         image.shape,
         image.dtype,
     )
-    dialog = _FinalPreviewDialog(image, mask_regions, display_options)
+    dialog = _FinalPreviewDialog(
+        image,
+        mask_regions,
+        display_options,
+        invalid_sunspot_mask,
+    )
     dialog.exec()
     LOGGER.info("Final result preview closed.")
