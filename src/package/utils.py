@@ -152,10 +152,20 @@ def collect_image_metadata(
             "array_size_bytes": int(image.nbytes),
         },
     }
-    if image.ndim >= 2:
+    if image.ndim == 2:
+        image_info["array"]["height_px"] = int(image.shape[0])
+        image_info["array"]["width_px"] = int(image.shape[1])
+    elif image.ndim >= 3 and image.shape[-1] in (3, 4):
+        # TIFF RGB/RGBA arrays commonly use YXS or YXC axis order.
+        image_info["array"]["height_px"] = int(image.shape[-3])
+        image_info["array"]["width_px"] = int(image.shape[-2])
+        image_info["array"]["channel_count"] = int(image.shape[-1])
+        image_info["array"]["leading_dimensions"] = [
+            int(dimension) for dimension in image.shape[:-3]
+        ]
+    elif image.ndim >= 3:
         image_info["array"]["height_px"] = int(image.shape[-2])
         image_info["array"]["width_px"] = int(image.shape[-1])
-    if image.ndim >= 3:
         image_info["array"]["leading_dimensions"] = [
             int(dimension) for dimension in image.shape[:-2]
         ]
