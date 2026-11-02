@@ -71,7 +71,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         darkingConfig = config["LimbDarkingResolution"]
         darkingMethod = darkingConfig["chosen_method"]
 
-        svFolder = output_root / config["Paths"]["folder_names"]["LimbDarkingResolution"]
+        svFolder = output_root
 
         if darkingMethod == "polynomialFit":
             moduleVersions["LimbDarkingResolution"] = ldr.version
@@ -99,7 +99,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         emphasisConfig = config["Emphasis"]
         emphasisMethod = emphasisConfig["chosen_method"]
 
-        svFolder = output_root / config["Paths"]["folder_names"]["Emphasis"]
+        svFolder = output_root
 
         if emphasisMethod == "SobelFilter":
             moduleVersions["Emphasis"] = sobel_filter.version
@@ -142,7 +142,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         extractionConfig = config["Extraction"]
         extractionMethod = extractionConfig["chosen_method"]
 
-        svFolder = output_root / config["Paths"]["folder_names"]["Extraction"]
+        svFolder = output_root
 
         if extractionMethod == "countComponents":
 
@@ -216,7 +216,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         config,
         image_path,
         count,
-        output_dir=output_root / "summary",
+        output_dir=output_root,
     )
     plt.imshow(image, origin="lower", cmap="gray")
     plt.colorbar(label="Pixel value")
