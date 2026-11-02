@@ -14,7 +14,7 @@ import math
 from datetime import datetime
 from pathlib import Path
 from pprint import pformat
-from typing import Any
+from typing import Any, TypeAlias, cast
 
 import cv2
 import matplotlib.pyplot as plt
@@ -68,7 +68,12 @@ def loadImage(image_path: str | Path) -> npt.NDArray[Any]:
     return np.asarray(image)
 
 
-def _metadata_to_json(value: Any, max_items: int = 256) -> Any:
+JSONValue: TypeAlias = (
+    str | int | float | bool | None | list["JSONValue"] | dict[str, "JSONValue"]
+)
+
+
+def _metadata_to_json(value: object, max_items: int = 256) -> JSONValue:
     """Convert metadata values to bounded, JSON-compatible Python values."""
     if value is None or isinstance(value, (str, int, bool)):
         if isinstance(value, str) and len(value) > 65536:
@@ -254,7 +259,10 @@ def collect_image_metadata(
             "format_specific_metadata": "No format-specific reader is configured.",
         }
 
-    return _metadata_to_json(image_info)
+    converted = _metadata_to_json(image_info)
+    if not isinstance(converted, dict):
+        raise TypeError("画像メタデータのルートは辞書である必要があります。")
+    return cast(dict[str, Any], converted)
 
 def svImage_withInfo(image: np.ndarray, info: dict | str, path: str | Path) -> None:
     """画像をメタデータ(PngInfo)とともに保存します。
