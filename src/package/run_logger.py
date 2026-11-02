@@ -16,7 +16,7 @@ from pathlib import Path
 from pprint import pformat
 from typing import Any
 
-from src.package.config import resolve_path
+from src.package.config import CONFIG_PATH, resolve_path
 
 
 PACKAGE_DISTRIBUTIONS = {
@@ -108,6 +108,28 @@ def _redact_arguments(arguments: list[str]) -> list[str]:
     return redacted
 
 
+def _redact_config(value: Any) -> Any:
+    """Return a copy of configuration data with secret-like keys masked."""
+    if isinstance(value, dict):
+        sanitized: dict[Any, Any] = {}
+        for key, item in value.items():
+            normalized_key = str(key).lower().replace("-", "_")
+            sensitive_markers = tuple(
+                marker.replace("-", "_") for marker in SENSITIVE_ARGUMENT_MARKERS
+            )
+            sanitized[key] = (
+                "<redacted>"
+                if any(marker in normalized_key for marker in sensitive_markers)
+                else _redact_config(item)
+            )
+        return sanitized
+    if isinstance(value, list):
+        return [_redact_config(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_redact_config(item) for item in value)
+    return copy.deepcopy(value)
+
+
 class RunLogger:
     """Write one human-readable and one JSON log for a processing run."""
 
@@ -131,6 +153,7 @@ class RunLogger:
         self.log_path = log_directory / f"run_{timestamp}.log"
         self.json_path = log_directory / f"run_{timestamp}.json"
 
+        safe_config = _redact_config(config)
         self.data: dict[str, Any] = {
             "run_id": self.run_id,
             "status": "running",
@@ -139,12 +162,13 @@ class RunLogger:
             "duration_seconds": None,
             "execution": {
                 "entrypoint": str(Path(sys.argv[0]).resolve()),
+                "configuration_file": str(CONFIG_PATH),
                 "arguments": _redact_arguments(sys.argv[1:]),
                 "working_directory": str(Path.cwd()),
                 "process_id": os.getpid(),
             },
             "environment": _collect_environment(),
-            "config": copy.deepcopy(config),
+            "config": safe_config,
             "result": None,
             "error": None,
         }
@@ -162,7 +186,7 @@ class RunLogger:
                     f"Log JSON: {self.json_path}",
                     "",
                     "=== CONFIGURATION ===",
-                    pformat(config, sort_dicts=False),
+                    pformat(safe_config, sort_dicts=False),
                     "",
                     "=== ENVIRONMENT ===",
                     pformat(self.data["environment"], sort_dicts=False),
