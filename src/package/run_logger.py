@@ -177,7 +177,8 @@ class RunLogger:
         self._console_handler: logging.StreamHandler | None = None
         if sys.stdout is not None:
             self._console_handler = logging.StreamHandler(sys.stdout)
-            self._console_handler.setLevel(logging.DEBUG)
+            # Keep the terminal concise; detailed DEBUG records remain in the file.
+            self._console_handler.setLevel(logging.INFO)
             self._console_handler.setFormatter(self._logging_handler.formatter)
             self._logging_logger.addHandler(self._console_handler)
 
