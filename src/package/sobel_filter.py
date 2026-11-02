@@ -1,9 +1,12 @@
 """16 bit画像にSobelフィルターを適用し、結果を画像として保存する。"""
+import logging
 from pathlib import Path
 
 import cv2
 import numpy as np
 from PIL import Image
+
+LOGGER = logging.getLogger("sunspot.sobel_filter")
 
 version = 1.00
 
@@ -124,22 +127,22 @@ if __name__ == "__main__":
 
     # 最初の1枚を読み込む
     input_path = image_paths[0]
-    print(f"読み込み対象: {input_path}")
-    print(f"ファイルが存在するか: {input_path.is_file()}")
-    print(f"ファイルサイズ: {input_path.stat().st_size if input_path.is_file() else 'ファイルなし'}")
+    LOGGER.info(f"読み込み対象: {input_path}")
+    LOGGER.info(f"ファイルが存在するか: {input_path.is_file()}")
+    LOGGER.info(f"ファイルサイズ: {input_path.stat().st_size if input_path.is_file() else 'ファイルなし'}")
     #image = cv2.imread(str(input_path), cv2.IMREAD_UNCHANGED)
     try:
         with Image.open(input_path) as pil_image:
-            print(f"画像形式: {pil_image.format}")
-            print(f"画像モード: {pil_image.mode}")
-            print(f"画像サイズ: {pil_image.size}")
+            LOGGER.info(f"画像形式: {pil_image.format}")
+            LOGGER.info(f"画像モード: {pil_image.mode}")
+            LOGGER.info(f"画像サイズ: {pil_image.size}")
 
             image = np.array(pil_image)
 
-        print(f"読み込み成功: dtype={image.dtype}, shape={image.shape}")
+        LOGGER.info(f"読み込み成功: dtype={image.dtype}, shape={image.shape}")
 
     except Exception as e:
-        print(f"Pillowでも読み込めませんでした: {e}")
+        LOGGER.exception("Pillowでも読み込めませんでした: %s", e)
         raise
 
 
@@ -166,11 +169,11 @@ if __name__ == "__main__":
     g_display = normalize_magnitude_image(g)
 
     # 画像を保存
-    print("出力フォルダ:", OUTPUT_DIR.resolve())
-    print("出力ファイル:", (OUTPUT_DIR / OUTPUT_NAME_GX).resolve())
-    print("出力ファイル名:", OUTPUT_NAME_GX)
+    LOGGER.info("出力フォルダ: %s", OUTPUT_DIR.resolve())
+    LOGGER.info("出力ファイル: %s", (OUTPUT_DIR / OUTPUT_NAME_GX).resolve())
+    LOGGER.info("出力ファイル名: %s", OUTPUT_NAME_GX)
     cv2.imwrite(str(OUTPUT_DIR / OUTPUT_NAME_GX), gx_display)
     cv2.imwrite(str(OUTPUT_DIR / OUTPUT_NAME_GY), gy_display)
     cv2.imwrite(str(OUTPUT_DIR / OUTPUT_NAME_G), g_display)
 
-    print(f"処理が完了しました。出力先: {OUTPUT_DIR}")
+    LOGGER.info(f"処理が完了しました。出力先: {OUTPUT_DIR}")

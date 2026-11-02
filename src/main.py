@@ -14,10 +14,8 @@
     - ``run.py`` から受け取った設定に基づく処理の実行
 """
 
-from pprint import pprint
+import logging
 from typing import Any
-
-import matplotlib.pyplot as plt
 from numpy import dtype, ndarray
 from numpy._typing._shape import _AnyShape
 
@@ -33,6 +31,9 @@ from src.package import (
 from src.package import config as configMOD
 from src.package import limb_darking_resolution as ldr
 from src.package.run_logger import RunLogger
+from src.package.qt_preview import show_final_preview
+
+LOGGER = logging.getLogger("sunspot.main")
 
 
 def main(config: dict, run_logger: RunLogger | None = None) -> int:
@@ -48,10 +49,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
     int
         マスク適用後に残った黒点候補数。
     """
-    print("Starting main process...")
-    print("\n\n===Config===")
-    pprint(config)
-    print("============\n\n")
+    LOGGER.info("Starting main process...")
 
     image_path = configMOD.resolve_path(config["Paths"]["input_image"])
     output_root = (
@@ -62,7 +60,22 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
     output_root.mkdir(parents=True, exist_ok=True)
 
     # 画像の明るさ（画素値）を取得し、変数image（numpy配列）に代入します。
-    image = utils.loadImage(image_path)    
+    LOGGER.info("Input image: %s", image_path)
+    image = utils.loadImage(image_path)
+    LOGGER.info("Loaded image: shape=%s, dtype=%s", image.shape, image.dtype)
+    try:
+        image_metadata = utils.collect_image_metadata(image_path, image)
+        if run_logger is not None:
+            run_logger.record_event("input_image_metadata", image_metadata)
+        else:
+            LOGGER.debug("Input image metadata: %s", image_metadata)
+    except Exception as error:
+        # Metadata collection is supplementary and must not prevent image processing.
+        LOGGER.warning(
+            "入力画像のメタデータを取得できませんでした。画像処理は継続します: %s",
+            error,
+        )
+        LOGGER.debug("画像メタデータ取得時の詳細:", exc_info=True)
 
     moduleVersions = {}
     raw_image = image
@@ -70,6 +83,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
     try:
         darkingConfig = config["LimbDarkingResolution"]
         darkingMethod = darkingConfig["chosen_method"]
+        LOGGER.info("Limb darkening method: %s", darkingMethod)
 
         svFolder = output_root
 
@@ -98,6 +112,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
     try:
         emphasisConfig = config["Emphasis"]
         emphasisMethod = emphasisConfig["chosen_method"]
+        LOGGER.info("Emphasis method: %s", emphasisMethod)
 
         svFolder = output_root
 
@@ -141,6 +156,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
     try:
         extractionConfig = config["Extraction"]
         extractionMethod = extractionConfig["chosen_method"]
+        LOGGER.info("Extraction method: %s", extractionMethod)
 
         svFolder = output_root
 
@@ -192,6 +208,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
                 },
             )
 
+        sunspot_labels = binary_image.copy()
         count, image, mask_details = mask.applyMask(
             binary_image,  # pyright: ignore[reportArgumentType]
             regions,
@@ -200,6 +217,52 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         )
         if run_logger is not None:
             run_logger.record_event("mask_applied", mask_details)
+
+        statistics_path = output_root / "sunspot_statistics.csv"
+        exported_count = utils.save_sunspot_statistics_csv(
+            sunspot_labels,
+            mask_details["excluded_candidate_labels"],
+            statistics_path,
+        )
+        LOGGER.info(
+            "Saved sunspot statistics: %s (%d spots)",
+            statistics_path,
+            exported_count,
+        )
+        exclusion_list_path = output_root / "sunspot_exclusion_list.csv"
+        excluded_count = utils.save_sunspot_exclusion_csv(
+            sunspot_labels,
+            mask_details["regions"],
+            exclusion_list_path,
+        )
+        LOGGER.info(
+            "Saved sunspot exclusion list: %s (%d excluded spots)",
+            exclusion_list_path,
+            excluded_count,
+        )
+        if run_logger is not None:
+            run_logger.record_event(
+                "sunspot_statistics_exported",
+                {
+                    "csv_path": str(statistics_path),
+                    "spot_count": exported_count,
+                    "exclusion_list_csv_path": str(exclusion_list_path),
+                    "excluded_spot_count": excluded_count,
+                    "coordinate_origin": "top-left",
+                    "coordinate_indexing": "zero-based pixels",
+                    "excluded_by_mask": [
+                        {
+                            "label": int(label),
+                            "mask_ids": [
+                                int(region["index"])
+                                for region in mask_details["regions"]
+                                if int(label) in region["overlapping_candidate_labels"]
+                            ],
+                        }
+                        for label in mask_details["excluded_candidate_labels"]
+                    ],
+                },
+            )
     except Exception as e:
         raise RuntimeError(f"[Fatal]: 連結成分の抽出に失敗しました。:{e}") from e
     
@@ -218,11 +281,10 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         count,
         output_dir=output_root,
     )
-    # 対話的なプレビューは既定で無効にし、バッチ実行が plt.show() で停止しないようにする。
+    # 対話的な最終確認は設定で有効化した場合のみ PyQt ダイアログで表示する。
     if config.get("Display", {}).get("show_final_image", False):
-        plt.imshow(image, origin="lower", cmap="gray")
-        plt.colorbar(label="Pixel value")
-        plt.show()
+        show_final_preview(image)
     
 
+    LOGGER.info("Processing completed: %d sunspots detected", count)
     return count

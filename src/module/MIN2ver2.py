@@ -7,8 +7,9 @@ main: MIN2_ignore_sunspots()
 limb_wigth*(2/3) の範囲にないものは黒点とみなします。
 """
 
+import logging
 import pathlib
-from pprint import pformat, pprint
+from pprint import pformat
 
 import cv2
 import matplotlib.pyplot as plt
@@ -17,6 +18,8 @@ from matplotlib import gridspec
 from matplotlib.patches import Circle
 
 from src.package.qt_dialogs import select_directory, select_file
+
+LOGGER = logging.getLogger("sunspot.min2")
 
 version = "MIN2 v2.4.0"  # 黒点リトライ座標・iter_cycles=0・グローバル依存・描画まわりの修正
 
@@ -276,7 +279,7 @@ def fit_circle(
         点が3点未満の場合、または円を確定できない場合。
     """
     if len(spots) < 3:
-        print("[ERROR]:点が3点未満のため、円を作成できません。too little spots")
+        LOGGER.error("点が3点未満のため、円を作成できません。too little spots")
         if show:
             show_circle(img_inst=img_inst, spots=spots, cir_stat=False, n=n)
         raise ValueError("点不足")
@@ -698,10 +701,10 @@ def MIN2_ignore_sunspots(
 
     spots = cut_and_sampling(image, light_threshold, n)
     if debug:
-        pprint(spots)
+        LOGGER.debug("%s", pformat(spots))
     cx, cy, r = fit_circle(spots, show, image, n)  # 一回目の円情報
     if debug:
-        print(f"[INFO]:trial circle (cx,cy,r)={cx, cy, r}")
+        LOGGER.debug("初回試行円 (cx, cy, r)=%s", (cx, cy, r))
         if show:
             show_circle(
                 img_inst=image,
@@ -719,7 +722,7 @@ def MIN2_ignore_sunspots(
 
     for cycle in range(1, iter_cycles + 1):
         if debug:
-            print(f"iter: {cycle}")
+            LOGGER.debug("反復回数: %d", cycle)
 
         outside_spots = []
         inside_spots = []
@@ -735,15 +738,15 @@ def MIN2_ignore_sunspots(
         safe_points = inside_spots + outside_spots
 
         if len(outside_spots) < 3:
-            print("[WARN]:外側の点が3点未満のため、黒点排除を打ち切ります。")
+            LOGGER.warning("外側の点が3点未満のため、黒点排除を打ち切ります。")
             break
         try:
             cxo, cyo, ro = fit_circle(np.array(outside_spots, dtype=float), show, image, n)
         except ValueError as e:
-            print(f"[WARN]:外側の点から円を作れないため、黒点排除を打ち切ります。({e})")
+            LOGGER.warning("外側の点から円を作れないため、黒点排除を打ち切ります。(%s)", e)
             break
         if debug:
-            print(f"[INFO]:outside circle (cx,cy,r)={cxo, cyo, ro}")
+            LOGGER.debug("外側点から求めた円 (cx, cy, r)=%s", (cxo, cyo, ro))
             if show:
                 show_circle(
                     img_inst=image,
@@ -755,7 +758,7 @@ def MIN2_ignore_sunspots(
                     simple=show_simple,
                     n=n,
                 )
-            print(f"    [INFO]:外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}")
+            LOGGER.debug("外側の点の数: %d / 全体の点の数: %d", len(outside_spots), len(spots))
 
         sunspots: list[int] = []
         retry_points: list[list] = []
@@ -771,7 +774,7 @@ def MIN2_ignore_sunspots(
                 gap = min2far - np.abs(cyo - y)
                 tag = "TB"
             if debug:
-                print(f"    {i} x,y:{x, y} min2far:{min2far},gap:{gap}")
+                LOGGER.debug("候補 %d: x,y=%s min2far=%s gap=%s", i, (x, y), min2far, gap)
 
             if gap > limb_wigth * (2 / 3):
                 sunspots.append(i)
@@ -782,7 +785,7 @@ def MIN2_ignore_sunspots(
                     sun_threshold=light_threshold,
                 )
                 if debug:
-                    print(
+                    LOGGER.debug(
                         f"    黒点を検出しました({tag})。再検討します。\n    {point}\n    → {retry}"
                     )
                 if retry is not None:
@@ -795,7 +798,7 @@ def MIN2_ignore_sunspots(
         if not sunspots:
             break
         if len(safe_points) < 3:
-            print("[WARN]:黒点除外後の点が3点未満のため、直前の円を採用します。")
+            LOGGER.warning("黒点除外後の点が3点未満のため、直前の円を採用します。")
             break
         # 黒点とみなされない点だけで円を作成
         cx, cy, r = fit_circle(np.array(safe_points, dtype=float), show, image, n)
@@ -862,11 +865,11 @@ def main() -> None:
                 ),
             )
         if not path:
-            print("[INFO]:選択がキャンセルされました。")
+            LOGGER.info("[INFO]:選択がキャンセルされました。")
             return
 
     if args.dir or pathlib.Path(path).is_dir():
-        print(f"[INFO]:dir={path}")
+        LOGGER.info(f"[INFO]:dir={path}")
         for file in _collect_images(path):
             try:
                 (cx, cy), r = MIN2_ignore_sunspots(
@@ -878,17 +881,17 @@ def main() -> None:
                 )
             except ValueError as e:
                 # 旧コードは読み込み失敗で break して残りを全部スキップしていた
-                print(f"[ERROR]:{file}: {e}")
+                LOGGER.error("%s: %s", file, e)
                 continue
-            print((float(cx), float(cy), float(r)))
+            LOGGER.info((float(cx), float(cy), float(r)))
     else:
-        print(f"[INFO]:image={path}")
+        LOGGER.info(f"[INFO]:image={path}")
         start = perf_counter()
         result = MIN2_ignore_sunspots(
             "PATH", show=True, debug=True, img_path=path, show_simple=False
         )
-        print(f"[INFO]:result{result}")
-        print(f"[INFO]:process time :{perf_counter() - start} s")
+        LOGGER.info(f"[INFO]:result{result}")
+        LOGGER.info(f"[INFO]:process time :{perf_counter() - start} s")
 
 
 if __name__ == "__main__":

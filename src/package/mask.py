@@ -1,5 +1,6 @@
 """黒点候補を矩形領域によって除外するモジュール。"""
 
+import logging
 from typing import Literal, overload
 
 import cv2
@@ -28,6 +29,8 @@ from PyQt6.QtWidgets import (
 )
 
 from src.package.qt_dialogs import ensure_qapplication
+
+LOGGER = logging.getLogger("sunspot.mask")
 
 
 def _to_display_image(image: np.ndarray, colormap: str) -> np.ndarray:
@@ -585,9 +588,16 @@ def selectMaskRegions(
         else []
     )
 
-    print(f"合計 {len(regions)} 個のマスク領域を選択しました。")
+    LOGGER.info("合計 %d 個のマスク領域を選択しました。", len(regions))
     for index, (x, y, width, height) in enumerate(regions, start=1):
-        print(f"マスク領域 {index}: x={x}, y={y}, width={width}, height={height}")
+        LOGGER.info(
+            "マスク領域 %d: x=%d, y=%d, width=%d, height=%d",
+            index,
+            x,
+            y,
+            width,
+            height,
+        )
     return regions
 
 
@@ -703,8 +713,8 @@ def applyMask(
         masked_labels[np.isin(labels, list(excluded_labels))] = 0
 
     count = original_count - len(excluded_labels)
-    print("除外した黒点数:", len(excluded_labels))
-    print("マスク適用後の黒点数:", count)
+    LOGGER.info("除外した黒点数: %d", len(excluded_labels))
+    LOGGER.info("マスク適用後の黒点数: %d", count)
 
     masked_image = np.where(masked_labels > 0, 0, 255).astype(np.uint8)
     if not return_details:

@@ -61,4 +61,4 @@ MaskDialog:
 
 # 実行後の結果画像プレビュー
 Display:
-  show_final_image: false # trueにするとMatplotlibで結果画像を表示（ウィンドウを閉じるまで待機）
+  show_final_image: false # trueにするとPyQtで最終解析画像を表示

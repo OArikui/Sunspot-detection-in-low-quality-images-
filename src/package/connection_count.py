@@ -1,8 +1,12 @@
 
 """Count connected components in a thresholded solar image."""
 
+import logging
+
 import numpy as np
 from scipy import ndimage
+
+LOGGER = logging.getLogger("sunspot.connection_count")
 
 version = "1.00"
 
@@ -69,12 +73,11 @@ def countConnectedComponents(
     binary_image = np.full(image.shape, 255, dtype=np.uint8)
     binary_image[filtered_mask] = 0
 
-    # 検出結果を表示
-    print("太陽領域の画素数:", np.count_nonzero(solar_mask))
-    print("閾値:", threshold)
-    print("黒点候補の画素数:", np.count_nonzero(filtered_mask))
-    print("黒点候補の連結成分数:", np.count_nonzero(keep_mask) - 1)
-
-    count = int(np.count_nonzero(keep_mask) - 1)
+    # 解析時の統計情報はセッションログへ記録する。
+    count = int(np.count_nonzero(keep_mask))
+    LOGGER.info("太陽領域の画素数: %d", np.count_nonzero(solar_mask))
+    LOGGER.info("閾値: %s", threshold)
+    LOGGER.info("黒点候補の画素数: %d", np.count_nonzero(filtered_mask))
+    LOGGER.info("黒点候補の連結成分数: %d", count)
 
     return count, binary_image, filtered_labels

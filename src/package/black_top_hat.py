@@ -1,8 +1,11 @@
 """太陽画像にBlack Top-Hat変換を適用し、結果を画像ファイルに保存する。"""
+import logging
 from pathlib import Path
 
 import cv2
 import numpy as np
+
+LOGGER = logging.getLogger("sunspot.black_top_hat")
 
 version = 1.00
 
@@ -69,7 +72,7 @@ if __name__ == "__main__":
             f"画像を読み込めませんでした: {input_path}"
         )
 
-    print(f"処理対象の画像: {input_path.name}")
+    LOGGER.info(f"処理対象の画像: {input_path.name}")
 
     closing, result = black_top_hat(image,kernelSize = KERNEL_SIZE)
 
@@ -88,7 +91,7 @@ if __name__ == "__main__":
             f"画像を保存できませんでした: {closing_path}"
         )
 
-    print(f"処理が完了しました: {closing_path}")
+    LOGGER.info(f"処理が完了しました: {closing_path}")
 
     # Black Top-Hat変換画像を保存
     output_path = OUTPUT_PATH / f"{OUTPUT_NAME}.png"
@@ -99,4 +102,4 @@ if __name__ == "__main__":
             f"画像を保存できませんでした: {output_path}"
         )
 
-    print(f"処理が完了しました: {output_path}")
+    LOGGER.info(f"処理が完了しました: {output_path}")

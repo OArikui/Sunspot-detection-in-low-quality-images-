@@ -1,11 +1,15 @@
 
 """二値化済みの太陽画像にWatershedを適用するモジュール。"""
 
+import logging
+
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import ndimage
 from skimage.feature import peak_local_max
 from skimage.segmentation import watershed
+
+LOGGER = logging.getLogger("sunspot.watershed")
 
 
 def watershedCount(
@@ -100,7 +104,7 @@ def watershedCount(
 
     # ラベル0は除外済みなので、そのまま数える。
     count = int(np.count_nonzero(keep_mask))
-    print("Watershedのマーカー数:", marker_count)
-    print("Watershed後の領域数:", len(np.unique(labels)) - 1)
+    LOGGER.info("Watershedのマーカー数: %d", marker_count)
+    LOGGER.info("Watershed後の領域数: %d", len(np.unique(labels)) - 1)
 
     return count, result_image, filtered_labels
