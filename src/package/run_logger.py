@@ -145,13 +145,13 @@ class RunLogger:
         self.started_clock = time.perf_counter()
 
         output_folder = resolve_path(str(config["Paths"]["output_folder"]))
-        log_directory = output_folder / "logs"
-        log_directory.mkdir(parents=True, exist_ok=True)
-
         timestamp = self.started_at.strftime("%Y%m%d_%H%M%S_%f")
         self.run_id = timestamp
-        self.log_path = log_directory / f"run_{timestamp}.log"
-        self.json_path = log_directory / f"run_{timestamp}.json"
+        self.session_dir = output_folder / f"session_{self.run_id}"
+        self.logs_dir = self.session_dir / "logs"
+        self.logs_dir.mkdir(parents=True, exist_ok=False)
+        self.log_path = self.logs_dir / f"run_{timestamp}.log"
+        self.json_path = self.logs_dir / f"run_{timestamp}.json"
 
         safe_config = _redact_config(config)
         self.data: dict[str, Any] = {
@@ -168,6 +168,11 @@ class RunLogger:
                 "process_id": os.getpid(),
             },
             "environment": _collect_environment(),
+            "output": {
+                "base_directory": str(output_folder),
+                "session_directory": str(self.session_dir),
+                "logs_directory": str(self.logs_dir),
+            },
             "config": safe_config,
             "events": [],
             "result": None,
@@ -184,6 +189,7 @@ class RunLogger:
                     f"Working directory: {Path.cwd()}",
                     f"Python: {sys.version.split()[0]}",
                     f"Platform: {platform.platform()}",
+                    f"Session directory: {self.session_dir}",
                     f"Log JSON: {self.json_path}",
                     "",
                     "=== CONFIGURATION ===",
