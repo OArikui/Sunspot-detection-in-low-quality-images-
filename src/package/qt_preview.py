@@ -775,7 +775,7 @@ class _FinalPreviewDialog(QDialog):
             lambda checked: self.canvas.set_navigation_mode("zoom" if checked else "none")
         )
 
-        help_label = QLabel("Ctrl + wheel: Zoom   |   Shift + right drag: Pan")
+        help_label = QLabel(" | Ctrl + wheel: Zoom   |   Shift + right drag: Pan")
         toolbar.addWidget(help_label)
 
         cursor_label = QLabel("Cursor: x=—, y=—")
