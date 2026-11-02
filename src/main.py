@@ -32,10 +32,11 @@ from src.package import (
     watershed,
 )
 from src.package import config as configMOD
+from src.package.run_logger import RunLogger
 from src.package import limb_darking_resolution as ldr
 
 
-def main(config: dict) -> int:
+def main(config: dict, run_logger: RunLogger | None = None) -> int:
     """設定に従って太陽画像の補正、強調、黒点候補抽出を実行する。
 
     Parameters
@@ -146,14 +147,6 @@ def main(config: dict) -> int:
                 image,  # pyright: ignore[reportArgumentType]
                 **extractionConfig["countComponents"]
             )
-            regions = mask.selectMaskRegions(
-                binary_image, config.get("MaskDialog", {}).get("display")
-            )
-            count, image = mask.applyMask(
-                binary_image, # pyright: ignore[reportArgumentType]
-                regions,
-                count
-            )
         elif extractionMethod == "watershed":
             imgName = f"watershed_c{extractionConfig['countComponents']['c']}_threshold{extractionConfig['countComponents']['space_threshold']}_minArea{extractionConfig['countComponents']['min_area']}_minDistance{extractionConfig['watershed']['min_distance']}.png"
 
@@ -168,16 +161,40 @@ def main(config: dict) -> int:
                 extractionConfig["watershed"]["min_distance"]
             )
 
-            regions = mask.selectMaskRegions(
-                binary_image, config.get("MaskDialog", {}).get("display")
-            )
-            count, image = mask.applyMask(
-                binary_image, # pyright: ignore[reportArgumentType]
-                regions,
-                count
-            )
         else:
             raise ValueError(f"Unknown extraction method: {extractionMethod}")
+
+        regions = mask.selectMaskRegions(
+            binary_image, config.get("MaskDialog", {}).get("display")
+        )
+        if run_logger is not None:
+            run_logger.record_event(
+                "mask_regions_selected",
+                {
+                    "image_width": int(binary_image.shape[1]),
+                    "image_height": int(binary_image.shape[0]),
+                    "selected_region_count": len(regions),
+                    "regions": [
+                        {
+                            "index": index,
+                            "x": x,
+                            "y": y,
+                            "width": width,
+                            "height": height,
+                        }
+                        for index, (x, y, width, height) in enumerate(regions, start=1)
+                    ],
+                },
+            )
+
+        count, image, mask_details = mask.applyMask(
+            binary_image,  # pyright: ignore[reportArgumentType]
+            regions,
+            count,
+            return_details=True,
+        )
+        if run_logger is not None:
+            run_logger.record_event("mask_applied", mask_details)
     except Exception as e:
         raise RuntimeError(f"[Fatal]: 連結成分の抽出に失敗しました。:{e}") from e
     
