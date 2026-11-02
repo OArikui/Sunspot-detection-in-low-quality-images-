@@ -325,7 +325,7 @@ class _FinalPreviewCanvas(QWidget):
             anchor_y + (self._view_y_max - anchor_y) / factor,
         )
 
-    def paintEvent(self, event: QPaintEvent) -> None:
+    def paintEvent(self, event: QPaintEvent | None) -> None:
         """画像、軸、カラーバー、ズーム選択範囲を描画する。
 
         Parameters
@@ -405,7 +405,7 @@ class _FinalPreviewCanvas(QWidget):
             painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.end()
 
-    def wheelEvent(self, event: QWheelEvent) -> None:
+    def wheelEvent(self, event: QWheelEvent | None) -> None:
         """Ctrl + ホイールでカーソル位置を中心に拡大・縮小する。
 
         Parameters
@@ -413,6 +413,8 @@ class _FinalPreviewCanvas(QWidget):
         event : QWheelEvent
             Qt のホイールイベント。
         """
+        if event is None:
+            return
         if not (event.modifiers() & Qt.KeyboardModifier.ControlModifier):
             super().wheelEvent(event)
             return
@@ -425,7 +427,7 @@ class _FinalPreviewCanvas(QWidget):
         self._zoom_at(1.2**steps, anchor)
         event.accept()
 
-    def mousePressEvent(self, event: QMouseEvent) -> None:
+    def mousePressEvent(self, event: QMouseEvent | None) -> None:
         """Shift + 右ドラッグのパン、または選択モードの開始を処理する。
 
         Parameters
@@ -433,6 +435,8 @@ class _FinalPreviewCanvas(QWidget):
         event : QMouseEvent
             Qt のマウス押下イベント。
         """
+        if event is None:
+            return
         if (
             event.button() == Qt.MouseButton.RightButton
             and event.modifiers() & Qt.KeyboardModifier.ShiftModifier
@@ -466,7 +470,7 @@ class _FinalPreviewCanvas(QWidget):
         self.update()
         event.accept()
 
-    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+    def mouseMoveEvent(self, event: QMouseEvent | None) -> None:
         """カーソル座標を表示し、ドラッグ中のパン／ズーム矩形を更新する。
 
         Parameters
@@ -474,6 +478,8 @@ class _FinalPreviewCanvas(QWidget):
         event : QMouseEvent
             Qt のマウス移動イベント。
         """
+        if event is None:
+            return
         position = event.position()
         point = self._map_to_data(position)
         if point is None:
@@ -500,7 +506,7 @@ class _FinalPreviewCanvas(QWidget):
         else:
             super().mouseMoveEvent(event)
 
-    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+    def mouseReleaseEvent(self, event: QMouseEvent | None) -> None:
         """ドラッグ終了時にパン状態を解除、または選択矩形へズームする。
 
         Parameters
@@ -508,6 +514,8 @@ class _FinalPreviewCanvas(QWidget):
         event : QMouseEvent
             Qt のマウス解放イベント。
         """
+        if event is None:
+            return
         if (
             event.button() != Qt.MouseButton.LeftButton
             and event.button() != Qt.MouseButton.RightButton
@@ -539,7 +547,7 @@ class _FinalPreviewCanvas(QWidget):
         self.update()
         event.accept()
 
-    def keyPressEvent(self, event: QKeyEvent) -> None:
+    def keyPressEvent(self, event: QKeyEvent | None) -> None:
         """Home キーで表示範囲を初期状態へ戻す。
 
         Parameters
@@ -547,6 +555,8 @@ class _FinalPreviewCanvas(QWidget):
         event : QKeyEvent
             Qt のキー押下イベント。
         """
+        if event is None:
+            return
         if event.key() == Qt.Key.Key_Home:
             self.reset_view()
             event.accept()
