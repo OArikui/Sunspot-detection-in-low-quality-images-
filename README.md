@@ -12,7 +12,7 @@ tutorial
 - `tutorial\vscode-setup.md` : VScodeの拡張機能の設定
 - `tutorial\env-setup.md` : pythonの仮想環境などの環境構築マニュアル
 
-## 実行ログ
+## 実行結果・ログの保存先
 
 アプリケーションを `python run.py` で実行すると、設定ファイルの内容と実行環境を含むログが自動的に保存されます。
 
