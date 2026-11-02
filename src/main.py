@@ -216,14 +216,38 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
             statistics_path,
             exported_count,
         )
+        exclusion_list_path = output_root / "sunspot_exclusion_list.csv"
+        excluded_count = utils.save_sunspot_exclusion_csv(
+            sunspot_labels,
+            mask_details["regions"],
+            exclusion_list_path,
+        )
+        LOGGER.info(
+            "Saved sunspot exclusion list: %s (%d excluded spots)",
+            exclusion_list_path,
+            excluded_count,
+        )
         if run_logger is not None:
             run_logger.record_event(
                 "sunspot_statistics_exported",
                 {
                     "csv_path": str(statistics_path),
                     "spot_count": exported_count,
+                    "exclusion_list_csv_path": str(exclusion_list_path),
+                    "excluded_spot_count": excluded_count,
                     "coordinate_origin": "top-left",
                     "coordinate_indexing": "zero-based pixels",
+                    "excluded_by_mask": [
+                        {
+                            "label": int(label),
+                            "mask_ids": [
+                                int(region["index"])
+                                for region in mask_details["regions"]
+                                if int(label) in region["overlapping_candidate_labels"]
+                            ],
+                        }
+                        for label in mask_details["excluded_candidate_labels"]
+                    ],
                 },
             )
     except Exception as e:
