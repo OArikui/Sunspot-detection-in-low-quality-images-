@@ -14,7 +14,7 @@ import math
 from datetime import datetime
 from pathlib import Path
 from pprint import pformat
-from typing import Any, TypeAlias, cast
+from typing import Any, cast
 
 import cv2
 import matplotlib.pyplot as plt
@@ -68,9 +68,7 @@ def loadImage(image_path: str | Path) -> npt.NDArray[Any]:
     return np.asarray(image)
 
 
-JSONValue: TypeAlias = (
-    str | int | float | bool | None | list["JSONValue"] | dict[str, "JSONValue"]
-)
+type JSONValue = str | int | float | bool | None | list[JSONValue] | dict[str, JSONValue]
 
 
 def _metadata_to_json(value: object, max_items: int = 256) -> JSONValue:
