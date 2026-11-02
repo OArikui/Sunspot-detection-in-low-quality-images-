@@ -56,8 +56,9 @@ class _FinalPreviewCanvas(QWidget):
         # Matplotlib の origin="lower" と同じ向きにする。
         normalized = np.ascontiguousarray(np.flipud(normalized))
         self._image_height, self._image_width = normalized.shape
+        image_bytes = normalized.tobytes()
         self._qimage = QImage(
-            normalized.data,
+            image_bytes,
             self._image_width,
             self._image_height,
             int(normalized.strides[0]),
