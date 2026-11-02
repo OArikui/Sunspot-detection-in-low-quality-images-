@@ -169,6 +169,7 @@ class RunLogger:
             },
             "environment": _collect_environment(),
             "config": safe_config,
+            "events": [],
             "result": None,
             "error": None,
         }
@@ -190,6 +191,34 @@ class RunLogger:
                     "",
                     "=== ENVIRONMENT ===",
                     pformat(self.data["environment"], sort_dicts=False),
+                    "",
+                ]
+            )
+        )
+
+    def record_event(self, event_name: str, details: dict[str, Any]) -> None:
+        """Append a processing event and its details to both log files.
+
+        Parameters
+        ----------
+        event_name : str
+            Short name identifying the processing event.
+        details : dict[str, Any]
+            Event-specific values, such as selected ROI coordinates.
+        """
+        event = {
+            "timestamp": datetime.now().astimezone().isoformat(),
+            "event": event_name,
+            "details": _redact_config(details),
+        }
+        self.data["events"].append(event)
+        self._write_json()
+        self._append_text(
+            "\n".join(
+                [
+                    f"=== EVENT: {event_name} ===",
+                    f"Timestamp: {event['timestamp']}",
+                    pformat(event["details"], sort_dicts=False),
                     "",
                 ]
             )
