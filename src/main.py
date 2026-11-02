@@ -218,9 +218,11 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         count,
         output_dir=output_root,
     )
-    plt.imshow(image, origin="lower", cmap="gray")
-    plt.colorbar(label="Pixel value")
-    plt.show()
+    # 対話的なプレビューは既定で無効にし、バッチ実行が plt.show() で停止しないようにする。
+    if config.get("Display", {}).get("show_final_image", False):
+        plt.imshow(image, origin="lower", cmap="gray")
+        plt.colorbar(label="Pixel value")
+        plt.show()
     
 
     return count
