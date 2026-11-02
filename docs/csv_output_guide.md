@@ -104,8 +104,7 @@ excluded_by_mask_ids:
 1;3
 
 excluded_by_mask_regions:
-[{"mask_id":1,"x":100,"y":80,"width":120,"height":90},
- {"mask_id":3,"x":180,"y":120,"width":100,"height":75}]
+[{"mask_id":1,"x":100,"y":80,"width":120,"height":90},{"mask_id":3,"x":180,"y":120,"width":100,"height":75}]
 ```
 
 上記の座標・大きさは説明用の架空の値です。JSON 配列の値も画像左上原点・0始まりのピクセル座標です。
