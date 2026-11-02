@@ -593,7 +593,8 @@ def applyMask(
     labels: np.ndarray,
     regions: list[tuple[int, int, int, int]],
     original_count: int,
-) -> tuple[int, np.ndarray]:
+    return_details: bool = False,
+) -> tuple[int, np.ndarray] | tuple[int, np.ndarray, dict]:
     """矩形領域と重なる黒点候補を除外する。
 
     Parameters
@@ -601,14 +602,17 @@ def applyMask(
     labels : numpy.ndarray
         黒点ごとに異なる整数ラベルを持つ画像。
     regions : list[tuple[int, int, int, int]]
-        除外する矩形領域のリスト。各要素は ``(x, y, width, height)``。
+        除外する矩形領域のリスト。各要素は (x, y, width, height)。
     original_count : int
         マスク適用前の黒点候補数。
+    return_details : bool, optional
+        True の場合、ROI 座標や領域ごとの重複候補数を追加で返す。
 
     Returns
     -------
-    tuple[int, numpy.ndarray]
-        マスク適用後の候補数と二値画像。
+    tuple[int, numpy.ndarray] | tuple[int, numpy.ndarray, dict]
+        マスク適用後の候補数と二値画像。return_details=True の場合は
+        画像サイズ、各 ROI の座標・面積・重複候補ラベル、除外数も返す。
 
     Raises
     ------
@@ -621,17 +625,58 @@ def applyMask(
     masked_labels = labels.copy()
     height, width = labels.shape
     excluded_labels: set[int] = set()
+    region_details: list[dict] = []
 
-    for x, y, roi_width, roi_height in regions:
+    for index, (x, y, roi_width, roi_height) in enumerate(regions, start=1):
         x1 = max(0, x)
         y1 = max(0, y)
         x2 = min(width, x + roi_width)
         y2 = min(height, y + roi_height)
+
         if x1 >= x2 or y1 >= y2:
+            region_details.append(
+                {
+                    "index": index,
+                    "x": int(x),
+                    "y": int(y),
+                    "width": int(roi_width),
+                    "height": int(roi_height),
+                    "clipped_bounds": None,
+                    "area_pixels": 0,
+                    "image_coverage_percent": 0.0,
+                    "overlapping_candidate_count": 0,
+                    "overlapping_candidate_labels": [],
+                }
+            )
             continue
+
         overlapping_labels = np.unique(labels[y1:y2, x1:x2])
-        excluded_labels.update(
+        overlapping_labels = sorted(
             int(label) for label in overlapping_labels if label != 0
+        )
+        excluded_labels.update(overlapping_labels)
+
+        area_pixels = (x2 - x1) * (y2 - y1)
+        region_details.append(
+            {
+                "index": index,
+                "x": int(x),
+                "y": int(y),
+                "width": int(roi_width),
+                "height": int(roi_height),
+                "clipped_bounds": {
+                    "x1": int(x1),
+                    "y1": int(y1),
+                    "x2_exclusive": int(x2),
+                    "y2_exclusive": int(y2),
+                },
+                "area_pixels": int(area_pixels),
+                "image_coverage_percent": round(
+                    area_pixels / (width * height) * 100, 4
+                ),
+                "overlapping_candidate_count": len(overlapping_labels),
+                "overlapping_candidate_labels": overlapping_labels,
+            }
         )
 
     if excluded_labels:
@@ -642,4 +687,17 @@ def applyMask(
     print("マスク適用後の黒点数:", count)
 
     masked_image = np.where(masked_labels > 0, 0, 255).astype(np.uint8)
-    return count, masked_image
+    if not return_details:
+        return count, masked_image
+
+    details = {
+        "image_width": int(width),
+        "image_height": int(height),
+        "selected_region_count": len(regions),
+        "regions": region_details,
+        "original_candidate_count": int(original_count),
+        "excluded_candidate_count": len(excluded_labels),
+        "excluded_candidate_labels": sorted(excluded_labels),
+        "remaining_candidate_count": int(count),
+    }
+    return count, masked_image, details
