@@ -63,6 +63,15 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
     LOGGER.info("Input image: %s", image_path)
     image = utils.loadImage(image_path)
     LOGGER.info("Loaded image: shape=%s, dtype=%s", image.shape, image.dtype)
+    try:
+        image_metadata = utils.collect_image_metadata(image_path, image)
+        if run_logger is not None:
+            run_logger.record_event("input_image_metadata", image_metadata)
+        else:
+            LOGGER.debug("Input image metadata: %s", image_metadata)
+    except Exception:
+        # Metadata collection is supplementary and must not prevent image processing.
+        LOGGER.exception("入力画像のメタデータを取得できませんでした: %s", image_path)
 
     moduleVersions = {}
     raw_image = image
