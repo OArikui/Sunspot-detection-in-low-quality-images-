@@ -69,9 +69,13 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
             run_logger.record_event("input_image_metadata", image_metadata)
         else:
             LOGGER.debug("Input image metadata: %s", image_metadata)
-    except Exception:
+    except Exception as error:
         # Metadata collection is supplementary and must not prevent image processing.
-        LOGGER.exception("入力画像のメタデータを取得できませんでした: %s", image_path)
+        LOGGER.warning(
+            "入力画像のメタデータを取得できませんでした。画像処理は継続します: %s",
+            error,
+        )
+        LOGGER.debug("画像メタデータ取得時の詳細:", exc_info=True)
 
     moduleVersions = {}
     raw_image = image
