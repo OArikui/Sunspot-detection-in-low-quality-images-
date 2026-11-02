@@ -704,7 +704,7 @@ def MIN2_ignore_sunspots(
         LOGGER.debug("%s", pformat(spots))
     cx, cy, r = fit_circle(spots, show, image, n)  # 一回目の円情報
     if debug:
-        LOGGER.info(f"[INFO]:trial circle (cx,cy,r)={cx, cy, r}")
+        LOGGER.debug("初回試行円 (cx, cy, r)=%s", (cx, cy, r))
         if show:
             show_circle(
                 img_inst=image,
@@ -722,7 +722,7 @@ def MIN2_ignore_sunspots(
 
     for cycle in range(1, iter_cycles + 1):
         if debug:
-            LOGGER.info(f"iter: {cycle}")
+            LOGGER.debug("反復回数: %d", cycle)
 
         outside_spots = []
         inside_spots = []
@@ -746,7 +746,7 @@ def MIN2_ignore_sunspots(
             LOGGER.warning("外側の点から円を作れないため、黒点排除を打ち切ります。(%s)", e)
             break
         if debug:
-            LOGGER.info(f"[INFO]:outside circle (cx,cy,r)={cxo, cyo, ro}")
+            LOGGER.debug("外側点から求めた円 (cx, cy, r)=%s", (cxo, cyo, ro))
             if show:
                 show_circle(
                     img_inst=image,
@@ -758,7 +758,7 @@ def MIN2_ignore_sunspots(
                     simple=show_simple,
                     n=n,
                 )
-            LOGGER.info(f"    [INFO]:外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}")
+            LOGGER.debug("外側の点の数: %d / 全体の点の数: %d", len(outside_spots), len(spots))
 
         sunspots: list[int] = []
         retry_points: list[list] = []
@@ -774,7 +774,7 @@ def MIN2_ignore_sunspots(
                 gap = min2far - np.abs(cyo - y)
                 tag = "TB"
             if debug:
-                LOGGER.info(f"    {i} x,y:{x, y} min2far:{min2far},gap:{gap}")
+                LOGGER.debug("候補 %d: x,y=%s min2far=%s gap=%s", i, (x, y), min2far, gap)
 
             if gap > limb_wigth * (2 / 3):
                 sunspots.append(i)
@@ -785,7 +785,7 @@ def MIN2_ignore_sunspots(
                     sun_threshold=light_threshold,
                 )
                 if debug:
-                    LOGGER.info(
+                    LOGGER.debug(
                         f"    黒点を検出しました({tag})。再検討します。\n    {point}\n    → {retry}"
                     )
                 if retry is not None:
