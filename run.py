@@ -3,6 +3,7 @@
 from src.main import main as run_processing
 from src.package.config import config
 from src.package.qt_dialogs import select_file
+from src.package.run_logger import RunLogger
 
 
 def main() -> int:
@@ -30,7 +31,15 @@ def main() -> int:
             raise ValueError("画像ファイルが選択されませんでした。")
         config["Paths"]["input_image"] = selected_file
 
-    return run_processing(config=config)
+    run_logger = RunLogger(config)
+    try:
+        count = run_processing(config=config)
+    except BaseException as error:
+        run_logger.fail(error)
+        raise
+
+    run_logger.finish({"sunspot_count": int(count)})
+    return count
 
 
 if __name__ == "__main__":
