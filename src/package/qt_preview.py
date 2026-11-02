@@ -133,6 +133,19 @@ class _FinalPreviewCanvas(QWidget):
         self.cursorChanged.emit("Cursor: x=—, y=—")
         self._emit_view_range()
 
+    def set_mask_fill_visible(self, visible: bool) -> None:
+        """最終確認画面のマスク範囲塗りつぶし表示を切り替える。
+
+        Parameters
+        ----------
+        visible : bool
+            True の場合はマスク範囲を半透明で塗りつぶす。
+        """
+        if self._show_mask_fill == visible:
+            return
+        self._show_mask_fill = visible
+        self.update()
+
     def _plot_area(self) -> QRectF:
         """軸ラベルとカラーバーの余白を除いた描画領域を返す。
 
@@ -685,6 +698,17 @@ class _FinalPreviewDialog(QDialog):
         navigation_group.addAction(zoom_action)
         toolbar.addAction(pan_action)
         toolbar.addAction(zoom_action)
+
+        toolbar.addSeparator()
+        mask_fill_action = QAction("Mask Fill", self)
+        mask_fill_action.setCheckable(True)
+        mask_fill_action.setChecked(
+            bool((display_options or {}).get("show_mask_fill", False))
+        )
+        mask_fill_action.setToolTip("選択したマスク範囲の塗りつぶしを表示／非表示")
+        mask_fill_action.toggled.connect(self.canvas.set_mask_fill_visible)
+        toolbar.addAction(mask_fill_action)
+
         pan_action.toggled.connect(
             lambda checked: self.canvas.set_navigation_mode("pan" if checked else "none")
         )
