@@ -173,6 +173,14 @@ class RunLogger:
         )
         self._logging_logger.addHandler(self._logging_handler)
 
+        # Keep runtime log records visible in the terminal as well as in the session file.
+        self._console_handler: logging.StreamHandler | None = None
+        if sys.stdout is not None:
+            self._console_handler = logging.StreamHandler(sys.stdout)
+            self._console_handler.setLevel(logging.DEBUG)
+            self._console_handler.setFormatter(self._logging_handler.formatter)
+            self._logging_logger.addHandler(self._console_handler)
+
         safe_config = _redact_config(config)
         self.data: dict[str, Any] = {
             "run_id": self.run_id,
@@ -220,6 +228,9 @@ class RunLogger:
                 ]
             )
         )
+        self._logging_logger.info(
+            "Run started: id=%s | session=%s", self.run_id, self.session_dir
+        )
 
     def record_event(self, event_name: str, details: dict[str, Any]) -> None:
         """Append a processing event and its details to both log files.
@@ -248,6 +259,7 @@ class RunLogger:
                 ]
             )
         )
+        self._logging_logger.info("Event: %s", event_name)
 
     def finish(self, result: dict[str, Any]) -> None:
         """Record successful completion and the processing result.
@@ -279,6 +291,11 @@ class RunLogger:
                     "",
                 ]
             )
+        )
+        self._logging_logger.info(
+            "Run completed in %.3f seconds | result=%s",
+            duration,
+            pformat(result, sort_dicts=False),
         )
         self._close_logger()
 
@@ -322,6 +339,9 @@ class RunLogger:
                 ]
             )
         )
+        self._logging_logger.error(
+            "Run failed: %s: %s", error_details["type"], error_details["message"]
+        )
         self._close_logger()
 
     def _close_logger(self) -> None:
@@ -329,6 +349,11 @@ class RunLogger:
         self._logging_logger.removeHandler(self._logging_handler)
         self._logging_handler.flush()
         self._logging_handler.close()
+        if self._console_handler is not None:
+            self._logging_logger.removeHandler(self._console_handler)
+            self._console_handler.flush()
+            self._console_handler.close()
+            self._console_handler = None
 
     def _write_json(self) -> None:
         """Atomically update the machine-readable JSON log."""
