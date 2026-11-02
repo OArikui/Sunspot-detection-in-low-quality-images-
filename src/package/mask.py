@@ -1,5 +1,7 @@
 """黒点候補を矩形領域によって除外するモジュール。"""
 
+from typing import Literal, overload
+
 import cv2
 import numpy as np
 from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
@@ -587,6 +589,24 @@ def selectMaskRegions(
     for index, (x, y, width, height) in enumerate(regions, start=1):
         print(f"マスク領域 {index}: x={x}, y={y}, width={width}, height={height}")
     return regions
+
+
+@overload
+def applyMask(
+    labels: np.ndarray,
+    regions: list[tuple[int, int, int, int]],
+    original_count: int,
+    return_details: Literal[False] = False,
+) -> tuple[int, np.ndarray]: ...
+
+
+@overload
+def applyMask(
+    labels: np.ndarray,
+    regions: list[tuple[int, int, int, int]],
+    original_count: int,
+    return_details: Literal[True],
+) -> tuple[int, np.ndarray, dict]: ...
 
 
 def applyMask(
