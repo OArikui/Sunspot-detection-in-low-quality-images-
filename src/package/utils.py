@@ -189,6 +189,108 @@ def save_sunspot_statistics_csv(
     return int(len(spot_labels))
 
 
+
+def save_sunspot_exclusion_csv(
+    label_image: np.ndarray,
+    mask_regions: list[dict[str, Any]],
+    output_path: str | Path,
+) -> int:
+    """マスクで除外された黒点と、除外元のマスク領域を CSV に保存する。
+
+    Parameters
+    ----------
+    label_image : numpy.ndarray
+        マスク適用前の黒点ラベル画像。
+    mask_regions : list[dict[str, Any]]
+        マスク領域ごとの座標と重複黒点ラベルを含む詳細情報。
+    output_path : str | pathlib.Path
+        除外一覧 CSV の保存先。
+
+    Returns
+    -------
+    int
+        除外一覧 CSV に出力した黒点数。
+    """
+    if label_image.ndim != 2:
+        raise ValueError("黒点ラベル画像は2次元配列にしてください。")
+
+    exclusions_by_label: dict[int, list[dict[str, int]]] = {}
+    for region in mask_regions:
+        mask_id = int(region["index"])
+        mask_info = {
+            "mask_id": mask_id,
+            "x": int(region["x"]),
+            "y": int(region["y"]),
+            "width": int(region["width"]),
+            "height": int(region["height"]),
+        }
+        for label in region["overlapping_candidate_labels"]:
+            exclusions_by_label.setdefault(int(label), []).append(mask_info)
+
+    csv_path = Path(output_path)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    field_names = [
+        "sunspot_id",
+        "label",
+        "centroid_x_px",
+        "centroid_y_px",
+        "bbox_x_px",
+        "bbox_y_px",
+        "bbox_width_px",
+        "bbox_height_px",
+        "area_px",
+        "excluded_by_mask_ids",
+        "excluded_by_mask_regions",
+    ]
+
+    excluded_labels = sorted(exclusions_by_label)
+    with csv_path.open("w", encoding="utf-8-sig", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(field_names)
+        for sunspot_id, spot_label in enumerate(excluded_labels, start=1):
+            y_coordinates, x_coordinates = np.nonzero(label_image == spot_label)
+            if x_coordinates.size == 0:
+                LOGGER.warning(
+                    "マスク除外一覧にある黒点ラベル %d が元のラベル画像に存在しません。",
+                    spot_label,
+                )
+                continue
+
+            min_x = int(x_coordinates.min())
+            max_x = int(x_coordinates.max())
+            min_y = int(y_coordinates.min())
+            max_y = int(y_coordinates.max())
+            excluded_by_masks = exclusions_by_label[spot_label]
+            mask_ids = [mask["mask_id"] for mask in excluded_by_masks]
+            writer.writerow(
+                [
+                    sunspot_id,
+                    spot_label,
+                    round(float(x_coordinates.mean()), 6),
+                    round(float(y_coordinates.mean()), 6),
+                    min_x,
+                    min_y,
+                    max_x - min_x + 1,
+                    max_y - min_y + 1,
+                    int(x_coordinates.size),
+                    ";".join(str(mask_id) for mask_id in mask_ids),
+                    json.dumps(excluded_by_masks, ensure_ascii=False),
+                ]
+            )
+
+    LOGGER.info(
+        "黒点除外一覧 CSV を保存しました: %s (除外黒点数: %d)",
+        csv_path,
+        len(excluded_labels),
+    )
+    for label, masks in exclusions_by_label.items():
+        LOGGER.debug(
+            "除外黒点 label=%d: mask_ids=%s",
+            label,
+            [mask["mask_id"] for mask in masks],
+        )
+    return len(excluded_labels)
+
 def closingCircle(image: np.ndarray, kernel: np.ndarray | int) -> np.ndarray:
     """
     楕円形またはカスタムカーネルを使用して、画像に対するモルフォロジー閉じ処理(Closing)を実行します。
