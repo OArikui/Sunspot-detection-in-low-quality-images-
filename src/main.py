@@ -14,9 +14,8 @@
     - ``run.py`` から受け取った設定に基づく処理の実行
 """
 
-from typing import Any
-
 import logging
+from typing import Any
 from numpy import dtype, ndarray
 from numpy._typing._shape import _AnyShape
 
