@@ -14,7 +14,6 @@
     - ``run.py`` から受け取った設定に基づく処理の実行
 """
 
-from pathlib import Path
 from pprint import pprint
 from typing import Any
 
@@ -32,8 +31,8 @@ from src.package import (
     watershed,
 )
 from src.package import config as configMOD
-from src.package.run_logger import RunLogger
 from src.package import limb_darking_resolution as ldr
+from src.package.run_logger import RunLogger
 
 
 def main(config: dict, run_logger: RunLogger | None = None) -> int:
