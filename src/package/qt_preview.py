@@ -101,8 +101,8 @@ class _FinalPreviewCanvas(QWidget):
         else:
             normalized = np.full(values.shape, 127, dtype=np.uint8)
 
-        # Matplotlib の origin="lower" と同じ向きにする。
-        normalized = np.ascontiguousarray(np.flipud(normalized))
+        # マスク選択画面と同じ左上原点の画像配列を、そのまま表示する。
+        normalized = np.ascontiguousarray(normalized)
         self._image_height, self._image_width = normalized.shape
         image_bytes = normalized.tobytes()
         self._qimage = QImage(
@@ -171,7 +171,7 @@ class _FinalPreviewCanvas(QWidget):
         return target, scale
 
     def _map_to_data(self, position: QPointF) -> tuple[float, float] | None:
-        """キャンバス座標を Matplotlib と同じ左下原点の画像座標へ変換する。
+        """キャンバス座標を画像と同じ左上原点の画像座標へ変換する。
 
         Parameters
         ----------
@@ -187,7 +187,7 @@ class _FinalPreviewCanvas(QWidget):
         if not target.contains(position):
             return None
         x = self._view_x_min + (position.x() - target.left()) / scale
-        y = self._view_y_min + (target.bottom() - position.y()) / scale
+        y = self._view_y_min + (position.y() - target.top()) / scale
         return x, y
 
     @staticmethod
@@ -372,7 +372,7 @@ class _FinalPreviewCanvas(QWidget):
         image_rect, scale = self._view_geometry()
         source_rect = QRectF(
             self._view_x_min,
-            self._image_height - self._view_y_max,
+            self._view_y_min,
             self._view_x_max - self._view_x_min,
             self._view_y_max - self._view_y_min,
         )
@@ -393,12 +393,10 @@ class _FinalPreviewCanvas(QWidget):
                 if x_min >= x_max or y_min >= y_max:
                     continue
 
-                # Mask rectangles use a top-left origin. Convert their Y range
-                # to the lower-left image coordinates used by this viewer.
-                data_y_top = self._image_height - y_min
+                # Mask rectangles and the displayed image both use a top-left origin.
                 rectangle = QRectF(
                     image_rect.left() + (x_min - self._view_x_min) * scale,
-                    image_rect.bottom() - (data_y_top - self._view_y_min) * scale,
+                    image_rect.top() + (y_min - self._view_y_min) * scale,
                     (x_max - x_min) * scale,
                     (y_max - y_min) * scale,
                 )
@@ -546,7 +544,7 @@ class _FinalPreviewCanvas(QWidget):
         if self._drag_mode == "pan":
             x_min, x_max, y_min, y_max = self._drag_start_view
             delta_x = -(position.x() - self._drag_start.x()) / self._drag_start_scale
-            delta_y = (position.y() - self._drag_start.y()) / self._drag_start_scale
+            delta_y = -(position.y() - self._drag_start.y()) / self._drag_start_scale
             self._set_view(
                 x_min + delta_x,
                 x_max + delta_x,
