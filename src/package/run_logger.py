@@ -73,6 +73,41 @@ def _collect_environment() -> dict[str, Any]:
     }
 
 
+SENSITIVE_ARGUMENT_MARKERS = (
+    "password",
+    "passwd",
+    "token",
+    "secret",
+    "api-key",
+    "api_key",
+    "access-key",
+    "access_key",
+)
+
+
+def _redact_arguments(arguments: list[str]) -> list[str]:
+    """Mask values passed with common secret-bearing command-line options."""
+    redacted: list[str] = []
+    mask_next = False
+    for argument in arguments:
+        if mask_next:
+            redacted.append("<redacted>")
+            mask_next = False
+            continue
+
+        option, separator, value = argument.partition("=")
+        is_sensitive = any(
+            marker in option.lower() for marker in SENSITIVE_ARGUMENT_MARKERS
+        )
+        if is_sensitive and separator:
+            redacted.append(f"{option}=<redacted>")
+        else:
+            redacted.append(argument)
+            if is_sensitive and not separator:
+                mask_next = True
+    return redacted
+
+
 class RunLogger:
     """Write one human-readable and one JSON log for a processing run."""
 
@@ -104,7 +139,7 @@ class RunLogger:
             "duration_seconds": None,
             "execution": {
                 "entrypoint": str(Path(sys.argv[0]).resolve()),
-                "arguments": sys.argv[1:],
+                "arguments": _redact_arguments(sys.argv[1:]),
                 "working_directory": str(Path.cwd()),
                 "process_id": os.getpid(),
             },
