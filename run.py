@@ -33,7 +33,7 @@ def main() -> int:
 
     run_logger = RunLogger(config)
     try:
-        count = run_processing(config=config)
+        count = run_processing(config=config, run_logger=run_logger)
     except BaseException as error:
         run_logger.fail(error)
         raise
