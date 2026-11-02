@@ -55,6 +55,12 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
     print("============\n\n")
 
     image_path = configMOD.resolve_path(config["Paths"]["input_image"])
+    output_root = (
+        run_logger.session_dir
+        if run_logger is not None
+        else configMOD.resolve_path(config["Paths"]["output_folder"])
+    )
+    output_root.mkdir(parents=True, exist_ok=True)
 
     # 画像の明るさ（画素値）を取得し、変数image（numpy配列）に代入します。
     image = utils.loadImage(image_path)    
@@ -66,7 +72,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         darkingConfig = config["LimbDarkingResolution"]
         darkingMethod = darkingConfig["chosen_method"]
 
-        svFolder = Path(config["Paths"]["output_folder"]) / config["Paths"]["folder_names"]["LimbDarkingResolution"]
+        svFolder = output_root / config["Paths"]["folder_names"]["LimbDarkingResolution"]
 
         if darkingMethod == "polynomialFit":
             moduleVersions["LimbDarkingResolution"] = ldr.version
@@ -94,7 +100,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         emphasisConfig = config["Emphasis"]
         emphasisMethod = emphasisConfig["chosen_method"]
 
-        svFolder = Path(config["Paths"]["output_folder"]) / config["Paths"]["folder_names"]["Emphasis"]
+        svFolder = output_root / config["Paths"]["folder_names"]["Emphasis"]
 
         if emphasisMethod == "SobelFilter":
             moduleVersions["Emphasis"] = sobel_filter.version
@@ -137,7 +143,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         extractionConfig = config["Extraction"]
         extractionMethod = extractionConfig["chosen_method"]
 
-        svFolder = Path(config["Paths"]["output_folder"]) / config["Paths"]["folder_names"]["Extraction"]
+        svFolder = output_root / config["Paths"]["folder_names"]["Extraction"]
 
         if extractionMethod == "countComponents":
 
@@ -211,6 +217,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         config,
         image_path,
         count,
+        output_dir=output_root / "summary",
     )
     plt.imshow(image, origin="lower", cmap="gray")
     plt.colorbar(label="Pixel value")
