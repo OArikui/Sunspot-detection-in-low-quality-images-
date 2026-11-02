@@ -148,8 +148,8 @@ class RunLogger:
         timestamp = self.started_at.strftime("%Y%m%d_%H%M%S_%f")
         self.run_id = timestamp
         self.session_dir = output_folder / f"session_{self.run_id}"
-        self.logs_dir = self.session_dir / "logs"
-        self.logs_dir.mkdir(parents=True, exist_ok=False)
+        self.logs_dir = self.session_dir
+        self.session_dir.mkdir(parents=True, exist_ok=False)
         self.log_path = self.logs_dir / f"run_{timestamp}.log"
         self.json_path = self.logs_dir / f"run_{timestamp}.json"
 
