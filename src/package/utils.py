@@ -10,6 +10,7 @@
 import csv
 import json
 import logging
+import math
 from datetime import datetime
 from pathlib import Path
 from pprint import pformat
@@ -65,6 +66,185 @@ def loadImage(image_path: str | Path) -> npt.NDArray[Any]:
     image = np.nan_to_num(image, nan=0.0)
     
     return np.asarray(image)
+
+
+def _metadata_to_json(value: Any, max_items: int = 256) -> Any:
+    """Convert metadata values to bounded, JSON-compatible Python values."""
+    if value is None or isinstance(value, (str, int, bool)):
+        if isinstance(value, str) and len(value) > 65536:
+            return value[:65536] + f"... [truncated {len(value) - 65536} characters]"
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else str(value)
+    if isinstance(value, np.generic):
+        return _metadata_to_json(value.item(), max_items=max_items)
+    if isinstance(value, np.ndarray):
+        if value.ndim == 0:
+            return _metadata_to_json(value.item(), max_items=max_items)
+        flat = value.reshape(-1)
+        preview = [
+            _metadata_to_json(item, max_items=max_items)
+            for item in flat[:max_items]
+        ]
+        if flat.size > max_items:
+            return {
+                "shape": list(value.shape),
+                "dtype": str(value.dtype),
+                "preview": preview,
+                "omitted_items": int(flat.size - max_items),
+            }
+        return preview
+    if isinstance(value, bytes):
+        try:
+            return value.decode("utf-8")
+        except UnicodeDecodeError:
+            return {
+                "hex": value[:max_items].hex(),
+                "length_bytes": len(value),
+                "truncated": len(value) > max_items,
+            }
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, dict):
+        return {
+            str(key): _metadata_to_json(item, max_items=max_items)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        converted = [
+            _metadata_to_json(item, max_items=max_items)
+            for item in value[:max_items]
+        ]
+        if len(value) > max_items:
+            converted.append(f"... [{len(value) - max_items} more items]")
+        return converted
+    if hasattr(value, "isoformat"):
+        try:
+            return value.isoformat()
+        except (TypeError, ValueError):
+            pass
+    return str(value)
+
+
+def collect_image_metadata(
+    image_path: str | Path,
+    image: np.ndarray,
+) -> dict[str, Any]:
+    """Collect source-file, decoded-array, and format-specific image metadata.
+
+    TIFF metadata includes the first 32 pages' tags and embedded ImageJ/OME
+    descriptions. FITS metadata includes every HDU header. Pixel data is not
+    copied into the log.
+    """
+    path = Path(image_path)
+    stat = path.stat()
+    image_info: dict[str, Any] = {
+        "path": str(path.resolve()),
+        "file_name": path.name,
+        "file_extension": path.suffix.lower(),
+        "file_size_bytes": int(stat.st_size),
+        "last_modified": datetime.fromtimestamp(stat.st_mtime).astimezone().isoformat(),
+        "array": {
+            "shape": [int(dimension) for dimension in image.shape],
+            "dimensions": int(image.ndim),
+            "dtype": str(image.dtype),
+            "pixel_count": int(image.size),
+            "array_size_bytes": int(image.nbytes),
+        },
+    }
+    if image.ndim >= 2:
+        image_info["array"]["height_px"] = int(image.shape[-2])
+        image_info["array"]["width_px"] = int(image.shape[-1])
+    if image.ndim >= 3:
+        image_info["array"]["leading_dimensions"] = [
+            int(dimension) for dimension in image.shape[:-2]
+        ]
+
+    suffix = path.suffix.lower()
+    if suffix in (".tif", ".tiff"):
+        with tifffile.TiffFile(path) as tiff:
+            series = [
+                {
+                    "index": index,
+                    "shape": [int(dimension) for dimension in item.shape],
+                    "dtype": str(item.dtype),
+                    "axes": str(item.axes),
+                    "kind": str(item.kind),
+                }
+                for index, item in enumerate(tiff.series)
+            ]
+            pages = []
+            for page_index, page in enumerate(tiff.pages[:32]):
+                tags = {}
+                for tag in page.tags.values():
+                    tags[str(tag.name)] = _metadata_to_json(tag.value)
+                pages.append(
+                    {
+                        "index": page_index,
+                        "shape": [int(dimension) for dimension in page.shape],
+                        "dtype": str(page.dtype),
+                        "tags": tags,
+                    }
+                )
+            image_info["container_metadata"] = {
+                "format": "TIFF",
+                "byte_order": str(tiff.byteorder),
+                "is_bigtiff": bool(tiff.is_bigtiff),
+                "page_count": len(tiff.pages),
+                "series": series,
+                "pages": pages,
+                "omitted_page_metadata_count": max(0, len(tiff.pages) - len(pages)),
+                "imagej_metadata": _metadata_to_json(tiff.imagej_metadata),
+                "ome_metadata": _metadata_to_json(tiff.ome_metadata),
+            }
+    elif suffix in (".fits", ".fit", ".fts"):
+        hdu_metadata = []
+        with fits.open(path, mode="readonly", memmap=True) as hdul:
+            for hdu_index, hdu in enumerate(hdul):
+                header_metadata: dict[str, Any] = {}
+                for card in hdu.header.cards:
+                    keyword = str(card.keyword).strip()
+                    if not keyword:
+                        continue
+                    card_value = {
+                        "value": _metadata_to_json(card.value),
+                        "comment": str(card.comment),
+                    }
+                    if keyword in header_metadata:
+                        current = header_metadata[keyword]
+                        if not isinstance(current, list):
+                            current = [current]
+                        current.append(card_value)
+                        header_metadata[keyword] = current
+                    else:
+                        header_metadata[keyword] = card_value
+
+                naxis = int(hdu.header.get("NAXIS", 0) or 0)
+                fits_shape = [
+                    int(hdu.header.get(f"NAXIS{axis}", 0) or 0)
+                    for axis in range(naxis, 0, -1)
+                ]
+                hdu_metadata.append(
+                    {
+                        "index": hdu_index,
+                        "name": str(hdu.name),
+                        "type": type(hdu).__name__,
+                        "shape": fits_shape,
+                        "header": header_metadata,
+                    }
+                )
+        image_info["container_metadata"] = {
+            "format": "FITS",
+            "hdu_count": len(hdu_metadata),
+            "hdus": hdu_metadata,
+        }
+    else:
+        image_info["container_metadata"] = {
+            "format": suffix.lstrip(".").upper() or "UNKNOWN",
+            "format_specific_metadata": "No format-specific reader is configured.",
+        }
+
+    return _metadata_to_json(image_info)
 
 def svImage_withInfo(image: np.ndarray, info: dict | str, path: str | Path) -> None:
     """画像をメタデータ(PngInfo)とともに保存します。
