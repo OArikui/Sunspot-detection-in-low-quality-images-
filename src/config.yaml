@@ -11,10 +11,6 @@
 Paths: # 相対パスはプロジェクトルートを基準とする
   input_image: '?Dialog?' # You can use "?Dialog?" to select a file interactively
   output_folder: '.\results'
-  folder_names: #output_folderに対する相対パス
-    LimbDarkingResolution: LimbDarkResol
-    Emphasis: Emphasis
-    Extraction: Extract
 
 #周縁減光補正
 LimbDarkingResolution:
