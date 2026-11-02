@@ -244,6 +244,7 @@ def output_image(
     config: dict[str, Any],
     image_path: Path | str,
     count: int,
+    output_dir: Path | str | None = None,
 ) -> None:
     """処理段階ごとの画像と実行情報を1枚の画像に保存する。
 
@@ -263,6 +264,8 @@ def output_image(
         入力画像のパス。
     count : int
         検出した黒点候補数。
+    output_dir : pathlib.Path | str | None, optional
+        サマリー画像の保存先ディレクトリ。未指定の場合は従来どおり output/ を使用する。
 
     Returns
     -------
@@ -275,7 +278,8 @@ def output_image(
         ("4. Binary Image", binary_image),
     ]
 
-    output_path = Path("output") / f"{Path(image_path).stem}_summary.png"
+    summary_directory = Path(output_dir) if output_dir is not None else Path("output")
+    output_path = summary_directory / f"{Path(image_path).stem}_summary.png"
 
     save_processing_summary(
         images=images,
