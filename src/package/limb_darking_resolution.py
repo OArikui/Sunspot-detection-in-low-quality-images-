@@ -1,5 +1,6 @@
 """周縁減光を補正するプログラム"""
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +10,8 @@ from numpy import dtype, floating, ndarray
 
 # 先輩が作った関数をインポート
 from src.module.MIN2ver2 import MIN2_ignore_sunspots as min2
+
+LOGGER = logging.getLogger("sunspot.limb_darkening")
 
 version = "0.0.1"
 
@@ -66,9 +69,9 @@ def polynomialFit(
     corrected[~mask] = img_float[~mask]
     corrected = np.clip(corrected, 0, 2**16 - 1).astype(np.uint16)
 
-    print(f"太陽の中心: ({cx}, {cy})")
-    print(f"太陽の半径: {max_radius}")
-    print(f"画像サイズ: {w} x {h}")
+    LOGGER.info("太陽の中心: (%.3f, %.3f)", cx, cy)
+    LOGGER.info("太陽の半径: %.3f", max_radius)
+    LOGGER.info("画像サイズ: %d x %d", w, h)
 
     return corrected
 
@@ -78,13 +81,13 @@ if __name__ == "__main__":
     image_paths = list(Path(input_dir).glob("img*.tiff"))
 
     if not image_paths:
-        print("対象の画像ファイルが見つかりませんでした")
+        LOGGER.info("対象の画像ファイルが見つかりませんでした")
     else:
         # 保存用のフォルダを自動で作る
         output_dir = Path("corrected_images")
         output_dir.mkdir(exist_ok=True)
 
-        print(f"合計 {len(image_paths)} 枚の画像を処理します...")
+        LOGGER.info(f"合計 {len(image_paths)} 枚の画像を処理します...")
 
         eroCount = 0  # エラー画像のカウントを初期化
         # 1枚ずつ順番に一括処理！
@@ -92,19 +95,19 @@ if __name__ == "__main__":
             filename = Path(path).name
             output_path = output_dir / f"after_{filename}"
 
-            print(f"処理中: {filename} ...")
+            LOGGER.info(f"処理中: {filename} ...")
             img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
             if img is None:
-                print(f"画像が見つかりません: {path}")
+                LOGGER.info(f"画像が見つかりません: {path}")
                 eroCount += 1
                 continue
 
             corrected_image = polynomialFit(image=img, alpha=0.85, brightness_boost=1.1)
             if not cv2.imwrite(str(output_path), corrected_image):
-                print(f"画像の保存に失敗しました: {output_path}")
+                LOGGER.info(f"画像の保存に失敗しました: {output_path}")
                 eroCount += 1
                 continue
 
-        print(
+        LOGGER.info(
             f"{len(image_paths) - eroCount}/{len(image_paths)}件 の画像の自動処理と保存が成功しました！"
         )

@@ -7,7 +7,9 @@
 アプリケーションのメイン処理は ``src/main.py`` に、
 実行制御はプロジェクトルートの ``run.py`` に配置する。
 """
+import csv
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from pprint import pformat
@@ -22,6 +24,8 @@ from astropy.io import fits
 from matplotlib import font_manager
 from PIL import Image as PlImage
 from PIL import PngImagePlugin
+
+LOGGER = logging.getLogger("sunspot.utils")
 
 
 def loadImage(image_path: str | Path) -> npt.NDArray[Any]:
@@ -100,9 +104,89 @@ def svImage_withInfo(image: np.ndarray, info: dict | str, path: str | Path) -> N
     try:
         # パラメータを含めて保存
         im.save(file_path, pnginfo=metadata)
-        print(f"画像を保存しました: {file_path}")
-    except Exception as e:
-        print(f"画像の保存に失敗しました: {file_path} (エラー: {e})")
+        LOGGER.info("画像を保存しました: %s", file_path)
+    except Exception:
+        LOGGER.exception("画像の保存に失敗しました: %s", file_path)
+
+
+def save_sunspot_statistics_csv(
+    label_image: np.ndarray,
+    excluded_labels: list[int],
+    output_path: str | Path,
+) -> int:
+    """マスク適用後に残った黒点の重心・外接矩形・面積を CSV に保存する。
+
+    Parameters
+    ----------
+    label_image : numpy.ndarray
+        黒点ごとに異なる正の整数ラベルを持つ2次元画像。
+    excluded_labels : list[int]
+        マスク領域によって除外されたラベル。
+    output_path : str | pathlib.Path
+        CSV の保存先。
+
+    Returns
+    -------
+    int
+        CSV に出力した黒点数。
+    """
+    if label_image.ndim != 2:
+        raise ValueError("黒点ラベル画像は2次元配列にしてください。")
+
+    retained_labels = label_image.copy()
+    if excluded_labels:
+        retained_labels[np.isin(retained_labels, excluded_labels)] = 0
+
+    spot_labels = np.unique(retained_labels)
+    spot_labels = spot_labels[spot_labels > 0]
+    csv_path = Path(output_path)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+    field_names = [
+        "sunspot_id",
+        "label",
+        "centroid_x_px",
+        "centroid_y_px",
+        "bbox_x_px",
+        "bbox_y_px",
+        "bbox_width_px",
+        "bbox_height_px",
+        "area_px",
+    ]
+    with csv_path.open("w", encoding="utf-8-sig", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(field_names)
+        for sunspot_id, spot_label in enumerate(spot_labels, start=1):
+            y_coordinates, x_coordinates = np.nonzero(
+                retained_labels == spot_label
+            )
+            min_x = int(x_coordinates.min())
+            max_x = int(x_coordinates.max())
+            min_y = int(y_coordinates.min())
+            max_y = int(y_coordinates.max())
+            writer.writerow(
+                [
+                    sunspot_id,
+                    int(spot_label),
+                    round(float(x_coordinates.mean()), 6),
+                    round(float(y_coordinates.mean()), 6),
+                    min_x,
+                    min_y,
+                    max_x - min_x + 1,
+                    max_y - min_y + 1,
+                    int(x_coordinates.size),
+                ]
+            )
+
+    LOGGER.info(
+        "黒点統計 CSV を保存しました: %s (黒点数: %d)",
+        csv_path,
+        len(spot_labels),
+    )
+    LOGGER.debug(
+        "CSV 座標系: 左上原点、0始まり。外接矩形サイズは幅・高さ、面積は画素数。",
+    )
+    return int(len(spot_labels))
 
 
 def closingCircle(image: np.ndarray, kernel: np.ndarray | int) -> np.ndarray:
@@ -289,4 +373,4 @@ def output_image(
         output_path=output_path,
     )
 
-    print(f"処理結果レポートを保存しました: {output_path}")
+    LOGGER.info("処理結果レポートを保存しました: %s", output_path)

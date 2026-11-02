@@ -1,12 +1,14 @@
 """Load project configuration and resolve paths relative to the project root."""
 
+import logging
 from pathlib import Path
-from pprint import pprint
+from pprint import pformat
 
 import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = PROJECT_ROOT / "src" / "config.yaml"
+LOGGER = logging.getLogger("sunspot.config")
 
 
 def load_config() -> dict:
@@ -52,6 +54,5 @@ config = load_config()
 
 if __name__ == "__main__":
     config = load_config()
-    for k, v in config:
-        print(f"{k}:")
-        pprint(v)
+    for key, value in config.items():
+        LOGGER.info("%s:\n%s", key, pformat(value))

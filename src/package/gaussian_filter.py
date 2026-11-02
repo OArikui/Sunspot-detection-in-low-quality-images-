@@ -1,9 +1,12 @@
 """ガウシアン背景差し引きを行うモジュール。"""
+import logging
 from pathlib import Path
 
 import cv2
 import numpy as np
 from scipy.ndimage import gaussian_filter
+
+LOGGER = logging.getLogger("sunspot.gaussian_filter")
 
 version = 1.00
 
@@ -60,7 +63,7 @@ if __name__ == "__main__":
         raise FileNotFoundError(
             f"画像を読み込めませんでした: {input_path}"
         )
-        print(f"処理対象の画像: {input_path.name}")
+        LOGGER.info(f"処理対象の画像: {input_path.name}")
     
     result = gaussian_high_pass_filter(image,sigmaSize=SIGMA)
 
@@ -92,4 +95,4 @@ if __name__ == "__main__":
             f"画像を保存できませんでした: {output_path}"
         )
 
-    print(f"処理が完了しました: {output_path}")
+    LOGGER.info(f"処理が完了しました: {output_path}")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import locale
 import os
 import platform
@@ -152,6 +153,26 @@ class RunLogger:
         self.log_path = self.session_dir / f"run_{timestamp}.log"
         self.json_path = self.session_dir / f"run_{timestamp}.json"
 
+        self._logging_logger = logging.getLogger("sunspot")
+        self._logging_logger.setLevel(logging.DEBUG)
+        self._logging_logger.propagate = False
+        for existing_handler in tuple(self._logging_logger.handlers):
+            self._logging_logger.removeHandler(existing_handler)
+            existing_handler.close()
+        self._logging_handler = logging.FileHandler(
+            self.log_path,
+            mode="a",
+            encoding="utf-8",
+        )
+        self._logging_handler.setLevel(logging.DEBUG)
+        self._logging_handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
+        )
+        self._logging_logger.addHandler(self._logging_handler)
+
         safe_config = _redact_config(config)
         self.data: dict[str, Any] = {
             "run_id": self.run_id,
@@ -259,6 +280,7 @@ class RunLogger:
                 ]
             )
         )
+        self._close_logger()
 
     def fail(self, error: BaseException) -> None:
         """Record an unhandled exception and its traceback.
@@ -300,6 +322,13 @@ class RunLogger:
                 ]
             )
         )
+        self._close_logger()
+
+    def _close_logger(self) -> None:
+        """Flush and detach the session file logger."""
+        self._logging_logger.removeHandler(self._logging_handler)
+        self._logging_handler.flush()
+        self._logging_handler.close()
 
     def _write_json(self) -> None:
         """Atomically update the machine-readable JSON log."""
