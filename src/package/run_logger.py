@@ -230,6 +230,10 @@ class RunLogger:
             )
         )
 
+        self._logging_logger.info(
+            "Run started: id=%s | session=%s", self.run_id, self.session_dir
+        )
+
     def record_event(self, event_name: str, details: dict[str, Any]) -> None:
         """Append a processing event and its details to both log files.
 
@@ -257,6 +261,8 @@ class RunLogger:
                 ]
             )
         )
+
+        self._logging_logger.info("Event: %s", event_name)
 
     def finish(self, result: dict[str, Any]) -> None:
         """Record successful completion and the processing result.
@@ -289,6 +295,7 @@ class RunLogger:
                 ]
             )
         )
+        self._logging_logger.info("Run completed successfully in %.3f seconds.", duration)
         self._close_logger()
 
     def fail(self, error: BaseException) -> None:
@@ -331,6 +338,9 @@ class RunLogger:
                 ]
             )
         )
+        self._logging_logger.error(
+            "Run failed: %s: %s", error_details["type"], error_details["message"]
+        )
         self._close_logger()
 
     def _close_logger(self) -> None:
@@ -360,13 +370,5 @@ class RunLogger:
             if not content.endswith("\n"):
                 file.write("\n")
 
-        # Mirror metadata and event blocks to the terminal as well as logger records.
-        if sys.stdout is not None:
-            try:
-                sys.stdout.write(content)
-                if not content.endswith("\n"):
-                    sys.stdout.write("\n")
-                sys.stdout.flush()
-            except (OSError, ValueError):
-                # A closed or redirected terminal must not interrupt image processing.
-                pass
+        # Detailed configuration, environment, and event payloads stay in the file.
+        # Only concise logger messages are sent to the terminal handler.
